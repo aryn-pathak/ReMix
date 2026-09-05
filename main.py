@@ -7,18 +7,18 @@ T = 8 # milliseconds, time length of a measurement, at sampling rate of 48kHz
 
 sofa = sf.read_sofa("KU_SS2.sofa")
 
-target = [90.0, 0.0]
 sources = sofa.SourcePosition[:, :2]
 
-difference = sources - target
-bestM = np.argmin(np.sum(difference ** 2, axis=1))
-
-left_IR = sofa.Data_IR[bestM, 1, :]
-right_IR = sofa.Data_IR[bestM, 0, :]
+def getir(az,el):
+    difference = sources - [az, el]
+    bestM = np.argmin(np.sum(difference ** 2, axis=1))
+    right_IR = sofa.Data_IR[bestM, 0, :]
+    left_IR = sofa.Data_IR[bestM, 1, :]
+    return right_IR, left_IR
 
 timeAxis = [i*(T/N) for i in range(384)]
-plt.plot(timeAxis, left_IR, color="red", label="Left IR")
-plt.plot(timeAxis, right_IR, color="blue", label="Right IR")
+plt.plot(timeAxis, getir(0.0, 0.0)[1], color="red", label="Left IR")
+plt.plot(timeAxis, getir(0.0, 0.0)[0], color="blue", label="Right IR")
 plt.xlabel("time (ms)")
 plt.ylabel("values")
 plt.legend()
