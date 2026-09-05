@@ -13,8 +13,8 @@ sources = sofa.SourcePosition[:, :2]
 difference = sources - target
 bestM = np.argmin(np.sum(difference ** 2, axis=1))
 
-left_IR = sofa.Data_IR[bestM, 0, :]
-right_IR = sofa.Data_IR[bestM, 1, :]
+left_IR = sofa.Data_IR[bestM, 1, :]
+right_IR = sofa.Data_IR[bestM, 0, :]
 
 timeAxis = [i*(T/N) for i in range(384)]
 plt.plot(timeAxis, left_IR, color="red", label="Left IR")
