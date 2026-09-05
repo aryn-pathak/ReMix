@@ -33,14 +33,15 @@ def itd(right, left):
     return leftTime - rightTime # negative ITD = right sound, positive = left sound
 
 el = sources[:, 1]
-azAxis = [i for i in range(
-    len(np.where(np.isclose(el, 0.0, atol=1e-5))[0])
-)]
+idx = np.where(np.isclose(el, 0.0, atol=1e-5))[0]
+azAxis = sources[idx, 0]
+azAxis = np.sort(azAxis)  # ensure ascending order for a clean line plot
 
 itdarr = []
-for M in azAxis:
-    az = sources[M, 0]
-    itdarr.append(itd(az, 0))
+for az in azAxis:
+    itdarr.append(itd(*getir(az, 0)))
 
 plt.plot(azAxis, itdarr)
+plt.xlabel("azimuth (degrees)")
+plt.ylabel("ITD (ms)")
 plt.show()
