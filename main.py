@@ -2,8 +2,8 @@ import numpy as np
 import sofar as sf
 import matplotlib.pyplot as plt
 
-N = 384
-T = 8
+N = 384 # no of samples in a measurement
+T = 8 # length of a measurement in ms (48kHz sampling rate)
 
 sofa = sf.read_sofa("KU_SS2.sofa")
 sources = sofa.SourcePosition[:, :2]
@@ -15,10 +15,10 @@ def getir(az,el):
     left_IR = sofa.Data_IR[bestM, 1, :]
     return right_IR, left_IR
 
-def plot_ir():
+def plot_ir(az, el):
     timeAxis = [i*(T/N) for i in range(384)]
-    plt.plot(timeAxis, getir(0.0, 0.0)[1], color="red", label="Left IR")
-    plt.plot(timeAxis, getir(0.0, 0.0)[0], color="blue", label="Right IR")
+    plt.plot(timeAxis, getir(az, el)[1], color="red", label="Left IR")
+    plt.plot(timeAxis, getir(az, el)[0], color="blue", label="Right IR")
     plt.xlabel("time (ms)")
     plt.ylabel("values")
     plt.legend()
@@ -34,17 +34,34 @@ def itd(right, left):
     leftTime = (T/N)*firstsample(left)
     return leftTime - rightTime
 
-def plot_itd():
-    el = sources[:, 1]
-    idx = np.where(np.isclose(el, 0.0, atol=1e-5))[0]
+def plot_itd(el):
+    elevation = sources[:, 1]
+    idx = np.where(np.isclose(elevation, el, atol=1e-5))[0]
     azAxis = np.sort(sources[idx, 0])
 
     itdarr = []
     for az in azAxis:
         itdarr.append(itd(*getir(az, 0)))
 
+    plt.xlabel("azimuth (degrees)")
+    plt.ylabel("ITD (ms)")
     plt.plot(azAxis, itdarr)
     plt.show()
 
-plot_ir()
-plot_itd()
+def get_freq(az, el):
+    right_IR, left_IR = getir(az, el)
+    right_freq = np.abs(np.fft.rfft(right_IR))
+    left_freq = np.abs(np.fft.rfft(left_IR))
+    return right_freq, left_freq
+
+def plot_freq(az, el):
+    right_freq, left_freq = get_freq(az, el)
+    plt.xlabel = "frequency (Hz)"
+    plt.ylabel("magnitude")
+    freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
+    plt.plot(freqAxis, right_freq, color="blue", label="Right Frequencies")
+    plt.plot(freqAxis, left_freq, color="red", label="Left Frequencies")
+    plt.legend()
+    plt.show()
+
+plot_freq(180, 0)
