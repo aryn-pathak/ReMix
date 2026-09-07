@@ -32,7 +32,7 @@ def firstsample(wave, threshold=0.15):
 def itd(right, left):
     rightTime = (T/N)*firstsample(right)
     leftTime = (T/N)*firstsample(left)
-    return leftTime - rightTime # +ve means right, -ve means left
+    return leftTime - rightTime # +ve means left
 
 def plot_itd(el):
     elevation = sources[:, 1]
@@ -48,32 +48,40 @@ def plot_itd(el):
     plt.plot(azAxis, itdarr)
     plt.show()
 
-
 def get_freq(az, el):
     right_IR, left_IR = getir(az, el)
-    rightNormal = right_IR[firstsample(right_IR):]
-    leftNormal = left_IR[firstsample(left_IR):]
+    d = itd(right_IR, left_IR)
 
-    max_len = max(len(rightNormal), len(leftNormal))
 
-    rightNormal = np.pad(rightNormal, (0, max_len - len(rightNormal)), 'constant')
-    leftNormal = np.pad(leftNormal, (0, max_len - len(leftNormal)), 'constant')
+    right_freq = 20 * np.log10(np.abs(np.fft.rfft(right_IR)) + 1e-9)
+    left_freq = 20 * np.log10(np.abs(np.fft.rfft(left_IR)) + 1e-9)
+    return right_freq, left_freq
 
-    right_freq = 20 * np.log10(np.abs(np.fft.rfft(rightNormal)) + 1e-9)
-    left_freq = 20 * np.log10(np.abs(np.fft.rfft(leftNormal)) + 1e-9)
-
-    freqAxis = np.fft.rfftfreq(n=max_len, d=1 / 48000)
-    return freqAxis, right_freq, left_freq
-
+def smooth_fractional_octave(freq, mag_db, fraction=3):
+    smoothed = np.zeros_like(mag_db)
+    for i, f in enumerate(freq):
+        if f == 0:
+            smoothed[i] = mag_db[i]
+            continue
+        f_lo = f / (2 ** (1 / (2 * fraction)))
+        f_hi = f * (2 ** (1 / (2 * fraction)))
+        mask = (freq >= f_lo) & (freq <= f_hi)
+        smoothed[i] = np.mean(mag_db[mask])
+    return smoothed
 
 def plot_freq(az, el):
-    freqAxis, right_freq, left_freq = get_freq(az, el)
-    freqDiff = left_freq - right_freq
+    right_freq, left_freq = get_freq(az, el)
+    freqDiff = left_freq - right_freq # +ve means left higher, -ve means right higher
+    plt.xlabel = "frequency (Hz)"
+    plt.ylabel("magnitude")
+    freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
 
-    plt.xlabel("frequency (Hz)")
-    plt.ylabel("magnitude difference (dB)")
-    plt.plot(freqAxis, freqDiff, color="red", label="Frequency Difference")
+    left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)  # 1/3-octave
+    right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
+    freqDiff_smooth = left_smooth - right_smooth
+
+    plt.plot(freqAxis, freqDiff_smooth, color="red", label="Frequency Difference")
     plt.legend()
     plt.show()
 
-plot_freq(0, 0)
+plot_freq(0,0)
