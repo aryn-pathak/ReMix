@@ -50,8 +50,8 @@ def plot_itd(el):
 
 def get_freq(az, el):
     right_IR, left_IR = getir(az, el)
-    right_freq = np.abs(np.fft.rfft(right_IR))
-    left_freq = np.abs(np.fft.rfft(left_IR))
+    right_freq = 20 * np.log10(np.abs(np.fft.rfft(right_IR)) + 1e-9)
+    left_freq = 20 * np.log10(np.abs(np.fft.rfft(left_IR)) + 1e-9)
     return right_freq, left_freq
 
 def plot_freq(az, el):
