@@ -56,12 +56,12 @@ def get_freq(az, el):
 
 def plot_freq(az, el):
     right_freq, left_freq = get_freq(az, el)
+    freqDiff = left_freq - right_freq # +ve means left higher, -ve means right higher
     plt.xlabel = "frequency (Hz)"
     plt.ylabel("magnitude")
     freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
-    plt.plot(freqAxis, right_freq, color="blue", label="Right Frequencies")
-    plt.plot(freqAxis, left_freq, color="red", label="Left Frequencies")
+    plt.plot(freqAxis, freqDiff, color="red", label="Frequency Difference")
     plt.legend()
     plt.show()
 
-plot_freq(180, 0)
+plot_freq(1, 0)
