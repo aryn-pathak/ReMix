@@ -69,19 +69,41 @@ def smooth_fractional_octave(freq, mag_db, fraction=3):
         smoothed[i] = np.mean(mag_db[mask])
     return smoothed
 
-def plot_freq(az, el):
+def plot_freqDiff(az, el):
     right_freq, left_freq = get_freq(az, el)
-    freqDiff = left_freq - right_freq # +ve means left higher, -ve means right higher
-    plt.xlabel = "frequency (Hz)"
+    plt.xlabel("frequency (Hz)")
     plt.ylabel("magnitude")
     freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
 
+    mask = freqAxis <= 20000
     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)  # 1/3-octave
     right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
     freqDiff_smooth = left_smooth - right_smooth
 
-    plt.plot(freqAxis, freqDiff_smooth, color="red", label="Frequency Difference")
+    plt.plot(freqAxis[mask], freqDiff_smooth[mask], color="red", label="Frequency Difference")
+    plt.plot()
+    plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
     plt.legend()
     plt.show()
 
-plot_freq(0,0)
+def plot_freq(az, el, max_freq=20000):
+    right_freq, left_freq = get_freq(az, el)
+    freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
+    mask = freqAxis <= max_freq
+
+    left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
+    right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(freqAxis[mask], left_smooth[mask], color="red", label="Left Ear", linewidth=1.5)
+    plt.plot(freqAxis[mask], right_smooth[mask], color="blue", label="Right Ear", linewidth=1.5)
+
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude (dB)")
+    plt.title(f"HRTF Magnitude Spectrum (Azimuth: {az}°, Elevation: {el}°)")
+    plt.grid(True, linestyle=":", alpha=0.6)
+    plt.legend()
+    plt.show()
+
+plot_freqDiff(90,0)
+plot_freqDiff(270,0)
