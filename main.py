@@ -81,7 +81,6 @@ def plot_freqDiff(az, el):
     freqDiff_smooth = left_smooth - right_smooth
 
     plt.plot(freqAxis[mask], freqDiff_smooth[mask], color="red", label="Frequency Difference")
-    plt.plot()
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
     plt.legend()
     plt.show()
@@ -105,5 +104,20 @@ def plot_freq(az, el, max_freq=20000):
     plt.legend()
     plt.show()
 
-plot_freqDiff(90,0)
-plot_freqDiff(270,0)
+azimuth = sources[:, 0]
+
+freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
+mask = freqAxis <= 20000
+
+cmap = plt.cm.viridis  # pick a map: 'viridis', 'plasma', 'coolwarm', etc.
+
+for i, az in enumerate(azimuth):
+    right_freq, left_freq = get_freq(az, 0)
+    left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
+    right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
+    freqDiff_smooth = left_smooth - right_smooth
+
+    # i / len(azimuth) goes from 0.0 to 1.0, shifting color automatically
+    plt.plot(freqAxis[mask], freqDiff_smooth[mask], color=cmap(i / len(azimuth)))
+
+plt.show()
