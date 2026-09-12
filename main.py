@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 N = 384 # no of samples in a measurement
 T = 8 # length of a measurement in ms (48kHz sampling rate)
 
-sofa = sf.read_sofa("KU_SS2.sofa")
+sofa = sf.read_sofa("KEMAR051123_2_processed.sofa")
 sources = sofa.SourcePosition[:, :2]
 
 def getir(az, el):
@@ -109,15 +109,23 @@ azimuth = sources[:, 0]
 freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
 mask = freqAxis <= 20000
 
-cmap = plt.cm.viridis  # pick a map: 'viridis', 'plasma', 'coolwarm', etc.
-
 for i, az in enumerate(azimuth):
     right_freq, left_freq = get_freq(az, 0)
     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
     right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
-    freqDiff_smooth = left_smooth - right_smooth
+    freqDiff_smooth = left_smooth[mask] - right_smooth[mask]
 
-    # i / len(azimuth) goes from 0.0 to 1.0, shifting color automatically
-    plt.plot(freqAxis[mask], freqDiff_smooth[mask], color=cmap(i / len(azimuth)))
+    fig, ax = plt.subplots()
+    Lcmap = plt.get_cmap("viridis")
+    Rcmap = plt.get_cmap("magma")
 
-plt.show()
+    if sum(freqDiff_smooth) < 0:
+        plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Rcmap(i / len(azimuth)))
+        plt.show()
+    elif sum(freqDiff_smooth) > 0:
+        plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Lcmap(i / len(azimuth)))
+        plt.show()
+    else:
+        continue
+
+    plt.show()
