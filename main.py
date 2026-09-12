@@ -109,23 +109,21 @@ azimuth = sources[:, 0]
 freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
 mask = freqAxis <= 20000
 
+fig, ax = plt.subplots()
+Lcmap = plt.get_cmap("viridis")
+Rcmap = plt.get_cmap("magma")
+
 for i, az in enumerate(azimuth):
     right_freq, left_freq = get_freq(az, 0)
     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
     right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
     freqDiff_smooth = left_smooth[mask] - right_smooth[mask]
 
-    fig, ax = plt.subplots()
-    Lcmap = plt.get_cmap("viridis")
-    Rcmap = plt.get_cmap("magma")
-
     if sum(freqDiff_smooth) < 0:
         plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Rcmap(i / len(azimuth)))
-        plt.show()
-    elif sum(freqDiff_smooth) > 0:
-        plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Lcmap(i / len(azimuth)))
-        plt.show()
+    # elif sum(freqDiff_smooth) > 0:
+        # plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Lcmap(i / len(azimuth)))
     else:
         continue
 
-    plt.show()
+plt.show()
