@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 N = 384 # no of samples in a measurement
 T = 8 # length of a measurement in ms (48kHz sampling rate)
 
-sofa = sf.read_sofa("KEMAR051123_2_processed.sofa")
+sofa = sf.read_sofa("KU100051023_4_processed.sofa")
 sources = sofa.SourcePosition[:, :2]
 
 def getir(az, el):
@@ -113,17 +113,37 @@ fig, ax = plt.subplots()
 Lcmap = plt.get_cmap("viridis")
 Rcmap = plt.get_cmap("magma")
 
+# for i, az in enumerate(azimuth):
+#     right_freq, left_freq = get_freq(az, 0)
+#     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
+#     right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
+#     freqDiff_smooth = left_smooth[mask] - right_smooth[mask]
+#
+#     if sum(freqDiff_smooth) < 0:
+#         plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Rcmap(i / len(azimuth)))
+#     # elif sum(freqDiff_smooth) > 0:
+#         # plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Lcmap(i / len(azimuth)))
+#     else:
+#         continue
+# plt.show()
+
+freqs = freqAxis[mask]
+az_rad = np.deg2rad(azimuth)
+Theta, R = np.meshgrid(az_rad, freqs, indexing='ij')
+Z = np.zeros((len(azimuth), len(freqs)))
+
 for i, az in enumerate(azimuth):
     right_freq, left_freq = get_freq(az, 0)
     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
     right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
+
     freqDiff_smooth = left_smooth[mask] - right_smooth[mask]
+    Z[i, :] = np.abs(freqDiff_smooth)
 
-    if sum(freqDiff_smooth) < 0:
-        plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Rcmap(i / len(azimuth)))
-    # elif sum(freqDiff_smooth) > 0:
-        # plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Lcmap(i / len(azimuth)))
-    else:
-        continue
+fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(8, 8))
+c = ax.pcolormesh(Theta, R, Z, cmap='magma', shading='nearest')
+ax.set_theta_zero_location("N")
+ax.set_theta_direction(-1)
 
+plt.colorbar(c, ax=ax, label='Magnitude (|Left - Right|)', pad=0.1)
 plt.show()
