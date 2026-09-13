@@ -2,21 +2,28 @@ import numpy as np
 import sofar as sf
 import matplotlib.pyplot as plt
 
-N = 256 # no of samples in a measurement
-T = 256 / 48000 * 1000 # length of a measurement in ms (48kHz sampling rate)
+N = 256  # no of samples in a measurement
+T = 256 / 48000 * 1000  # length of a measurement in ms (48kHz sampling rate)
 
-sofa = sf.read_sofa("HRIRs_mannequins/KEMAR051123_1_processed.sofa")
+sofa = sf.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
 
+
 def getir(az, el):
-    difference = sources - [az, el]
-    bestM = np.argmin(np.sum(difference ** 2, axis=1))
-    right_IR = sofa.Data_IR[bestM, 0, :]
-    left_IR = sofa.Data_IR[bestM, 1, :]
+    # Fixed: Handle 360-degree azimuth wrap-around correctly
+    az_diff = (sources[:, 0] - az + 180) % 360 - 180
+    el_diff = sources[:, 1] - el
+    bestM = np.argmin(az_diff ** 2 + el_diff ** 2)
+
+    # Fixed: Correct standard SOFA receiver mapping (0 = Left, 1 = Right)
+    left_IR = sofa.Data_IR[bestM, 0, :]
+    right_IR = sofa.Data_IR[bestM, 1, :]
+
     return right_IR, left_IR
 
+
 def plot_ir(az, el):
-    timeAxis = [i*(T/N) for i in range(384)]
+    timeAxis = [i * (T / N) for i in range(N)]
     plt.plot(timeAxis, getir(az, el)[1], color="red", label="Left IR")
     plt.plot(timeAxis, getir(az, el)[0], color="blue", label="Right IR")
     plt.xlabel("time (ms)")
@@ -24,15 +31,18 @@ def plot_ir(az, el):
     plt.legend()
     plt.show()
 
+
 def firstsample(wave, threshold=0.15):
     peak = np.max(np.abs(wave))
     threshold = threshold * peak
     return np.argmax(np.abs(wave) >= threshold)
 
+
 def itd(right, left):
-    rightTime = (T/N)*firstsample(right)
-    leftTime = (T/N)*firstsample(left)
-    return leftTime - rightTime # +ve means left
+    rightTime = (T / N) * firstsample(right)
+    leftTime = (T / N) * firstsample(left)
+    return leftTime - rightTime  # +ve means left
+
 
 def plot_itd(el):
     elevation = sources[:, 1]
@@ -48,14 +58,14 @@ def plot_itd(el):
     plt.plot(azAxis, itdarr)
     plt.show()
 
+
 def get_freq(az, el):
     right_IR, left_IR = getir(az, el)
-    d = itd(right_IR, left_IR)
-
 
     right_freq = 20 * np.log10(np.abs(np.fft.rfft(right_IR)) + 1e-9)
     left_freq = 20 * np.log10(np.abs(np.fft.rfft(left_IR)) + 1e-9)
     return right_freq, left_freq
+
 
 def smooth_fractional_octave(freq, mag_db, fraction=3):
     smoothed = np.zeros_like(mag_db)
@@ -70,14 +80,11 @@ def smooth_fractional_octave(freq, mag_db, fraction=3):
     return smoothed
 
 
-import numpy as np
-import matplotlib.pyplot as plt
-
 def plot_freqDiff(az, el):
     right_freq, left_freq = get_freq(az, el)
     plt.xlabel("frequency (Hz)")
     plt.ylabel("absolute magnitude difference")
-    freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
+    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
 
     mask = freqAxis <= 20000
     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)  # 1/3-octave
@@ -90,7 +97,6 @@ def plot_freqDiff(az, el):
     pos_diff = np.where(diff >= 0, diff, np.nan)
     neg_diff = np.where(diff < 0, np.abs(diff), np.nan)
 
-    # Plot the two segments with their respective colors
     plt.plot(freqs, pos_diff, color="red", label="Left")
     plt.plot(freqs, neg_diff, color="blue", label="Right")
 
@@ -98,9 +104,10 @@ def plot_freqDiff(az, el):
     plt.legend()
     plt.show()
 
+
 def plot_freq(az, el, max_freq=20000):
     right_freq, left_freq = get_freq(az, el)
-    freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
+    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= max_freq
 
     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
@@ -118,8 +125,7 @@ def plot_freq(az, el, max_freq=20000):
     plt.show()
 
 azimuth = sources[:, 0]
-
-freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
+freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
 mask = freqAxis <= 20000
 
 freqs = freqAxis[mask]
