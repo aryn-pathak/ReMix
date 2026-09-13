@@ -2,10 +2,10 @@ import numpy as np
 import sofar as sf
 import matplotlib.pyplot as plt
 
-N = 384 # no of samples in a measurement
-T = 8 # length of a measurement in ms (48kHz sampling rate)
+N = 256 # no of samples in a measurement
+T = 256 / 48000 * 1000 # length of a measurement in ms (48kHz sampling rate)
 
-sofa = sf.read_sofa("KU100051023_4_processed.sofa")
+sofa = sf.read_sofa("HRIRs_mannequins/KEMAR051123_1_processed.sofa")
 sources = sofa.SourcePosition[:, :2]
 
 def getir(az, el):
@@ -69,18 +69,31 @@ def smooth_fractional_octave(freq, mag_db, fraction=3):
         smoothed[i] = np.mean(mag_db[mask])
     return smoothed
 
+
+import numpy as np
+import matplotlib.pyplot as plt
+
 def plot_freqDiff(az, el):
     right_freq, left_freq = get_freq(az, el)
     plt.xlabel("frequency (Hz)")
-    plt.ylabel("magnitude")
+    plt.ylabel("absolute magnitude difference")
     freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
 
     mask = freqAxis <= 20000
     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)  # 1/3-octave
     right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
-    freqDiff_smooth = left_smooth - right_smooth
 
-    plt.plot(freqAxis[mask], freqDiff_smooth[mask], color="red", label="Frequency Difference")
+    freqDiff_smooth = left_smooth - right_smooth
+    freqs = freqAxis[mask]
+    diff = freqDiff_smooth[mask]
+
+    pos_diff = np.where(diff >= 0, diff, np.nan)
+    neg_diff = np.where(diff < 0, np.abs(diff), np.nan)
+
+    # Plot the two segments with their respective colors
+    plt.plot(freqs, pos_diff, color="red", label="Left")
+    plt.plot(freqs, neg_diff, color="blue", label="Right")
+
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
     plt.legend()
     plt.show()
@@ -108,24 +121,6 @@ azimuth = sources[:, 0]
 
 freqAxis = np.fft.rfftfreq(n=384, d=1 / 48000)
 mask = freqAxis <= 20000
-
-fig, ax = plt.subplots()
-Lcmap = plt.get_cmap("viridis")
-Rcmap = plt.get_cmap("magma")
-
-# for i, az in enumerate(azimuth):
-#     right_freq, left_freq = get_freq(az, 0)
-#     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
-#     right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
-#     freqDiff_smooth = left_smooth[mask] - right_smooth[mask]
-#
-#     if sum(freqDiff_smooth) < 0:
-#         plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Rcmap(i / len(azimuth)))
-#     # elif sum(freqDiff_smooth) > 0:
-#         # plt.plot(freqAxis[mask], np.abs(freqDiff_smooth), color=Lcmap(i / len(azimuth)))
-#     else:
-#         continue
-# plt.show()
 
 freqs = freqAxis[mask]
 az_rad = np.deg2rad(azimuth)
