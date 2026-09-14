@@ -150,7 +150,7 @@ def plot_heatmap():
     az_rad = np.deg2rad(azimuth)
     Theta, R = np.meshgrid(az_rad, freqs, indexing='ij')
 
-    # Create two separate matrices for left and right magnitudes
+    # Create two separate matrices for left and right values
     Z_left = np.zeros((len(azimuth), len(freqs)))
     Z_right = np.zeros((len(azimuth), len(freqs)))
 
@@ -159,32 +159,26 @@ def plot_heatmap():
         left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
         right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
 
-        # Store the magnitudes
-        Z_left[i, :] = np.abs(left_smooth[mask])
-        Z_right[i, :] = np.abs(right_smooth[mask])
+        Z_left[i, :] = left_smooth[mask]
+        Z_right[i, :] = right_smooth[mask]
 
-    # Calculate global min and max so both plots share the same color scale
-    vmin = min(Z_left.min(), Z_right.min())
-    vmax = max(Z_left.max(), Z_right.max())
-
-    # Create a figure with 1 row and 2 columns
+    abs_max = max(np.abs(Z_left).max(), np.abs(Z_right).max())
+    vmin = -abs_max
+    vmax = abs_max
     fig, axs = plt.subplots(1, 2, subplot_kw={'projection': 'polar'}, figsize=(16, 8))
 
-    # Plot Left Magnitude
-    c1 = axs[0].pcolormesh(Theta, R, Z_left, cmap='magma', shading='nearest', vmin=vmin, vmax=vmax)
+    c1 = axs[0].pcolormesh(Theta, R, Z_left, cmap='RdBu_r', shading='nearest', vmin=vmin, vmax=vmax)
     axs[0].set_theta_zero_location("N")
     axs[0].set_theta_direction(-1)
-    axs[0].set_title("Left Magnitude", pad=20)
+    axs[0].set_title("Left Amplitude", pad=20)
 
-    # Plot Right Magnitude
-    c2 = axs[1].pcolormesh(Theta, R, Z_right, cmap='magma', shading='nearest', vmin=vmin, vmax=vmax)
+    c2 = axs[1].pcolormesh(Theta, R, Z_right, cmap='RdBu_r', shading='nearest', vmin=vmin, vmax=vmax)
     axs[1].set_theta_zero_location("N")
     axs[1].set_theta_direction(-1)
-    axs[1].set_title("Right Magnitude", pad=20)
+    axs[1].set_title("Right Amplitude", pad=20)
 
-    # Add a shared colorbar for both subplots
-    fig.colorbar(c2, ax=axs, label='Magnitude', pad=0.1)
+    fig.colorbar(c2, ax=axs, label='Amplitude', pad=0.1)
 
     plt.show()
 
-plot_freq(90,0)
+plot_heatmap()
