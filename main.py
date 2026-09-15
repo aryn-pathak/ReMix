@@ -115,6 +115,7 @@ def plot_freq(az, el, max_freq=20000):
     plt.legend()
     plt.show()
 
+# heatmap of ILD
 def plot_heatmapDiff():
     azimuth = sources[:, 0]
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
@@ -141,8 +142,11 @@ def plot_heatmapDiff():
     plt.colorbar(c, ax=ax, label='Magnitude (|Left - Right|)', pad=0.1)
     plt.show()
 
+# plots heatmap of left and right IRs separately
 def plot_heatmap():
-    azimuth = sources[:, 0]
+    elevation = sources[:, 1]
+    idx = np.where(np.isclose(elevation, 0, atol=1e-5))[0]
+    azimuth = np.sort(sources[idx, 0])
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
 
@@ -181,4 +185,34 @@ def plot_heatmap():
 
     plt.show()
 
+# plots heatmap of average of left and right IRs
+def plot_heatmapAvg():
+    elevation = sources[:, 1]
+    idx = np.where(np.isclose(elevation, 0, atol=1e-5))[0]
+    azimuth = np.sort(sources[idx, 0])
+    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
+    mask = freqAxis <= 20000
+
+    freqs = freqAxis[mask]
+    az_rad = np.deg2rad(azimuth)
+    Theta, R = np.meshgrid(az_rad, freqs, indexing='ij')
+    Z = np.zeros((len(azimuth), len(freqs)))
+
+    for i, az in enumerate(azimuth):
+        right_freq, left_freq = get_freq(az, 0)
+        left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
+        right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
+
+        Z[i, :] = (left_smooth[mask] + right_smooth[mask]) / 2
+
+    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(8, 8))
+    c = ax.pcolormesh(Theta, R, Z, cmap='magma', shading='nearest')
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+
+    plt.colorbar(c, ax=ax, label='Arithmetic average of left and right', pad=0.1)
+    plt.show()
+
+plot_heatmapAvg()
+plot_heatmapDiff()
 plot_heatmap()
