@@ -213,6 +213,178 @@ def plot_heatmapAvg():
     plt.colorbar(c, ax=ax, label='Arithmetic average of left and right', pad=0.1)
     plt.show()
 
-plot_heatmapAvg()
-plot_heatmapDiff()
-plot_heatmap()
+def animate_freqDiff(az_list, el, interval=200, save_path=None):
+
+    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
+    mask = freqAxis <= 20000
+    freqs = freqAxis[mask]
+
+    fig, ax = plt.subplots()
+    ax.set_xlabel("frequency (Hz)")
+    ax.set_ylabel("absolute magnitude difference")
+    ax.axhline(y=0, color='black', linestyle='--', linewidth=1)
+
+    # placeholder lines, updated each frame
+    line_pos, = ax.plot([], [], color="red", label="Left")
+    line_neg, = ax.plot([], [], color="blue", label="Right")
+    ax.legend()
+
+    # set static x-limits up front; y-limits we'll adjust based on data
+    ax.set_xlim(freqs.min(), freqs.max())
+
+    title = ax.set_title("")
+
+    def compute_diff(az, el):
+        right_freq, left_freq = get_freq(az, el)
+        left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
+        right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
+        freqDiff_smooth = left_smooth - right_smooth
+        diff = freqDiff_smooth[mask]
+        pos_diff = np.where(diff >= 0, diff, np.nan)
+        neg_diff = np.where(diff < 0, np.abs(diff), np.nan)
+        return pos_diff, neg_diff
+
+    # precompute global y-limit so the axis doesn't jump around between frames
+    all_vals = []
+    for az in az_list:
+        p, n = compute_diff(az, el)
+        all_vals.append(p)
+        all_vals.append(n)
+    all_vals = np.concatenate(all_vals)
+    ymax = np.nanmax(all_vals)
+    ax.set_ylim(0, ymax * 1.05)
+
+    def update(frame_idx):
+        az = az_list[frame_idx]
+        pos_diff, neg_diff = compute_diff(az, el)
+        line_pos.set_data(freqs, pos_diff)
+        line_neg.set_data(freqs, neg_diff)
+        title.set_text(f"az = {az}°, el = {el}°")
+        return line_pos, line_neg, title
+
+    anim = FuncAnimation(fig, update, frames=len(az_list), interval=interval, blit=False)
+
+    if save_path:
+        anim.save(save_path)  # needs ffmpeg for .mp4, pillow for .gif
+    else:
+        plt.show()
+
+    return anim  # keep a reference so it doesn't get garbage-collected
+
+def animate_freq(az_list, el, max_freq=20000, interval=200, save_path=None):
+    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
+    mask = freqAxis <= max_freq
+    freqs = freqAxis[mask]
+
+    frames_data = []
+    global_min = float('inf')
+    global_max = float('-inf')
+
+    print("Precomputing Left/Right frames...")
+    for az in az_list:
+        right_freq, left_freq = get_freq(az, el)
+        left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
+        right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
+
+        l_data = left_smooth[mask]
+        r_data = right_smooth[mask]
+
+        # Track limits for a stable Y-axis
+        current_min = min(l_data.min(), r_data.min())
+        current_max = max(l_data.max(), r_data.max())
+        if current_min < global_min: global_min = current_min
+        if current_max > global_max: global_max = current_max
+
+        frames_data.append((l_data, r_data, az))
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.set_xlabel("Frequency (Hz)")
+    ax.set_ylabel("Magnitude (dB)")
+    ax.grid(True, linestyle=":", alpha=0.6)
+
+    # Add 5% padding to the top and bottom of the Y-axis
+    y_range = global_max - global_min
+    ax.set_ylim(global_min - 0.05 * y_range, global_max + 0.05 * y_range)
+    ax.set_xlim(freqs.min(), freqs.max())
+
+    # line_left, = ax.plot([], [], color="red", label="Left Ear", linewidth=1.5)
+    line_right, = ax.plot([], [], color="blue", label="Right Ear", linewidth=1.5)
+    ax.legend()
+
+    title = ax.set_title("")
+
+    def update(frame_idx):
+        l_data, r_data, az = frames_data[frame_idx]
+
+        # line_left.set_data(freqs, l_data)
+        line_right.set_data(freqs, r_data)
+        title.set_text(f"HRTF Magnitude Spectrum (Azimuth: {az}°, Elevation: {el}°)")
+
+        return line_right, title
+
+    anim = FuncAnimation(fig, update, frames=len(az_list), interval=interval, blit=False)
+
+    if save_path:
+        anim.save(save_path)
+    else:
+        plt.show()
+
+    return anim
+
+def animate_freqAvg(az_list, el, max_freq=20000, interval=200, save_path=None):
+    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
+    mask = freqAxis <= max_freq
+    freqs = freqAxis[mask]
+
+    frames_data = []
+    global_min = float('inf')
+    global_max = float('-inf')
+
+    print("Precomputing Average frames...")
+    for az in az_list:
+        right_freq, left_freq = get_freq(az, el)
+        left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
+        right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
+
+        avg_data = (left_smooth[mask] + right_smooth[mask]) / 2
+
+        # Track limits for a stable Y-axis
+        if avg_data.min() < global_min: global_min = avg_data.min()
+        if avg_data.max() > global_max: global_max = avg_data.max()
+
+        frames_data.append((avg_data, az))
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.set_xlabel("Frequency (Hz)")
+    ax.set_ylabel("Magnitude (dB)")
+    ax.grid(True, linestyle=":", alpha=0.6)
+
+    # Add 5% padding to the top and bottom of the Y-axis
+    y_range = global_max - global_min
+    ax.set_ylim(global_min - 0.05 * y_range, global_max + 0.05 * y_range)
+    ax.set_xlim(freqs.min(), freqs.max())
+
+    line_avg, = ax.plot([], [], color="purple", label="Average (Left & Right)", linewidth=1.5)
+    ax.legend()
+
+    title = ax.set_title("")
+
+    def update(frame_idx):
+        avg_data, az = frames_data[frame_idx]
+
+        line_avg.set_data(freqs, avg_data)
+        title.set_text(f"Average Magnitude Spectrum (Azimuth: {az}°, Elevation: {el}°)")
+
+        return line_avg, title
+
+    anim = FuncAnimation(fig, update, frames=len(az_list), interval=interval, blit=False)
+
+    if save_path:
+        anim.save(save_path)
+    else:
+        plt.show()
+
+    return anim
+
+az_list = np.arange(0, 360, 1)
+anim = animate_freq(az_list, el=0)
