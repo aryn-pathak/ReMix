@@ -119,7 +119,6 @@ def plot_freq(az, el, max_freq=20000):
     plt.legend()
     plt.show()
 
-
 # heatmap of ILD
 def plot_heatmapDiff():
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
@@ -386,24 +385,16 @@ def animate_freqAvg(az_list, el, max_freq=20000, interval=200, save_path=None):
 
 def plot_error():
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
-    mask = freqAxis <= 20000  # Cut off ultrasonic noise
-
+    mask = freqAxis <= 20000
     errorArr = []
 
     for i in range(len(az_list)):
-        az = az_list[i]
-        azNext = az_list[(i + 1) % len(az_list)]
+        curves = []
+        for n in range(5):
+            curves.append(smooth_fractional_octave(freqAxis, get_freq(az_list[i+n],0), fraction=3)[mask])
 
-        freq_right, _ = get_freq(az, 0)
-        freqNext_right, _ = get_freq(azNext, 0)
-
-        # 1. Smooth the data to look at the macro envelope, not the micro notches
-        right_smooth = smooth_fractional_octave(freqAxis, freq_right, fraction=3)
-        rightNext_smooth = smooth_fractional_octave(freqAxis, freqNext_right, fraction=3)
-
-        # 2. Calculate the error ONLY on the smoothed, audible frequencies
-        diff = right_smooth[mask] - rightNext_smooth[mask]
-        error = np.sqrt(np.sum(diff ** 2))
+        avgCurve = np.mean(curves, axis=0)[mask]
+        error = np.mean(np.linalg.norm(curves-avgCurve, axis=1))
 
         errorArr.append(error)
 
