@@ -386,20 +386,27 @@ def animate_freqAvg(az_list, el, max_freq=20000, interval=200, save_path=None):
 def plot_error():
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
+
+    all_curves = []
+    for az in az_list:
+        curve = smooth_fractional_octave(freqAxis, get_freq(az, 0), fraction=3)
+        all_curves.append(curve[mask])  # Mask applied once
+
+    all_curves = np.array(all_curves)
     errorArr = []
+    window = 5
 
-    for i in range(len(az_list)):
-        curves = []
-        for n in range(5):
-            curves.append(smooth_fractional_octave(freqAxis, get_freq(az_list[i+n],0), fraction=3)[mask])
-
-        avgCurve = np.mean(curves, axis=0)[mask]
-        error = np.mean(np.linalg.norm(curves-avgCurve, axis=1))
+    for i in range(len(az_list) - window + 1):
+        curves_subset = all_curves[i: i + window]
+        avgCurve = np.mean(curves_subset, axis=0)  # No double-masking
+        error = np.mean(np.linalg.norm(curves_subset - avgCurve, axis=1))
 
         errorArr.append(error)
 
     plt.figure(figsize=(10, 5))
-    plt.plot(az_list, errorArr, marker='.', color='purple')
+    valid_azimuths = az_list[:len(errorArr)]
+
+    plt.plot(valid_azimuths, errorArr, marker='.', color='purple')
     plt.xlabel("Azimuth (degrees)")
     plt.ylabel("Spectral Difference (Smoothed)")
     plt.title("Smoothed Spectral Difference Between Adjacent Azimuths (Elevation: 0°)")
