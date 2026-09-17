@@ -383,3 +383,26 @@ def animate_freqAvg(az_list, el, max_freq=20000, interval=200, save_path=None):
 
 # az_list = np.arange(0, 360, 1)
 # anim = animate_freq(az_list, el=0)
+
+def plot_error():
+    errorArr = []
+
+    for i in range(len(az_list)):
+        az = az_list[i]
+        azNext = az_list[(i + 1) % len(az_list)]
+
+        freq_right, _ = get_freq(az, 0)
+        freqNext_right, _ = get_freq(azNext, 0)
+
+        error = np.sqrt(np.sum((freq_right - freqNext_right) ** 2))
+        errorArr.append(error)
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(az_list, errorArr, marker='.', color='purple')
+    plt.xlabel("Azimuth (degrees)")
+    plt.ylabel("Spectral Difference")
+    plt.title("Spectral Difference Between Adjacent Azimuths (Elevation: 0°)")
+    plt.grid(True, linestyle=":", alpha=0.6)
+    plt.show()
+
+plot_error()
