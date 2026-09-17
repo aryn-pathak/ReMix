@@ -1,12 +1,16 @@
 import numpy as np
 import sofar as sf
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 N = 256  # no of samples in a measurement
 T = 256 / 48000 * 1000  # length of a measurement in ms (48kHz sampling rate)
 
 sofa = sf.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
+
+eq_idx = np.where(np.isclose(sources[:, 1], 0, atol=1e-5))[0]
+az_list = np.sort(sources[eq_idx, 0])
 
 def getir(az, el):
     # Fixed: Handle 360-degree azimuth wrap-around correctly
@@ -115,18 +119,18 @@ def plot_freq(az, el, max_freq=20000):
     plt.legend()
     plt.show()
 
+
 # heatmap of ILD
 def plot_heatmapDiff():
-    azimuth = sources[:, 0]
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
-
     freqs = freqAxis[mask]
-    az_rad = np.deg2rad(azimuth)
-    Theta, R = np.meshgrid(az_rad, freqs, indexing='ij')
-    Z = np.zeros((len(azimuth), len(freqs)))
 
-    for i, az in enumerate(azimuth):
+    az_rad = np.deg2rad(az_list)
+    Theta, R = np.meshgrid(az_rad, freqs, indexing='ij')
+    Z = np.zeros((len(az_list), len(freqs)))
+
+    for i, az in enumerate(az_list):
         right_freq, left_freq = get_freq(az, 0)
         left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
         right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
@@ -138,27 +142,22 @@ def plot_heatmapDiff():
     c = ax.pcolormesh(Theta, R, Z, cmap='magma', shading='nearest')
     ax.set_theta_zero_location("N")
     ax.set_theta_direction(-1)
-
     plt.colorbar(c, ax=ax, label='Magnitude (|Left - Right|)', pad=0.1)
     plt.show()
 
 # plots heatmap of left and right IRs separately
 def plot_heatmap():
-    elevation = sources[:, 1]
-    idx = np.where(np.isclose(elevation, 0, atol=1e-5))[0]
-    azimuth = np.sort(sources[idx, 0])
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
-
     freqs = freqAxis[mask]
-    az_rad = np.deg2rad(azimuth)
+
+    az_rad = np.deg2rad(az_list)
     Theta, R = np.meshgrid(az_rad, freqs, indexing='ij')
 
-    # Create two separate matrices for left and right values
-    Z_left = np.zeros((len(azimuth), len(freqs)))
-    Z_right = np.zeros((len(azimuth), len(freqs)))
+    Z_left = np.zeros((len(az_list), len(freqs)))
+    Z_right = np.zeros((len(az_list), len(freqs)))
 
-    for i, az in enumerate(azimuth):
+    for i, az in enumerate(az_list):
         right_freq, left_freq = get_freq(az, 0)
         left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
         right_smooth = smooth_fractional_octave(freqAxis, right_freq, fraction=3)
@@ -167,25 +166,21 @@ def plot_heatmap():
         Z_right[i, :] = right_smooth[mask]
 
     abs_max = max(np.abs(Z_left).max(), np.abs(Z_right).max())
-    vmin = -abs_max
-    vmax = abs_max
     fig, axs = plt.subplots(1, 2, subplot_kw={'projection': 'polar'}, figsize=(16, 8))
 
-    c1 = axs[0].pcolormesh(Theta, R, Z_left, cmap='RdBu_r', shading='nearest', vmin=vmin, vmax=vmax)
+    c1 = axs[0].pcolormesh(Theta, R, Z_left, cmap='RdBu_r', shading='nearest', vmin=-abs_max, vmax=abs_max)
     axs[0].set_theta_zero_location("N")
     axs[0].set_theta_direction(-1)
     axs[0].set_title("Left Amplitude", pad=20)
 
-    c2 = axs[1].pcolormesh(Theta, R, Z_right, cmap='RdBu_r', shading='nearest', vmin=vmin, vmax=vmax)
+    c2 = axs[1].pcolormesh(Theta, R, Z_right, cmap='RdBu_r', shading='nearest', vmin=-abs_max, vmax=abs_max)
     axs[1].set_theta_zero_location("N")
-    axs[1].set_theta_direction(-1)
     axs[1].set_title("Right Amplitude", pad=20)
+    axs[1].set_theta_direction(-1)
 
     fig.colorbar(c2, ax=axs, label='Amplitude', pad=0.1)
-
     plt.show()
 
-# plots heatmap of average of left and right IRs
 def plot_heatmapAvg():
     elevation = sources[:, 1]
     idx = np.where(np.isclose(elevation, 0, atol=1e-5))[0]
@@ -386,5 +381,5 @@ def animate_freqAvg(az_list, el, max_freq=20000, interval=200, save_path=None):
 
     return anim
 
-az_list = np.arange(0, 360, 1)
-anim = animate_freq(az_list, el=0)
+# az_list = np.arange(0, 360, 1)
+# anim = animate_freq(az_list, el=0)
