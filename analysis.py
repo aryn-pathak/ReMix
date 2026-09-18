@@ -301,7 +301,25 @@ def animate_freq(az_list, el, max_freq=20000, interval=200, save_path=None):
     ax.set_ylim(global_min - 0.05 * y_range, global_max + 0.05 * y_range)
     ax.set_xlim(freqs.min(), freqs.max())
 
-    # line_left, = ax.plot([], [], color="red", label="Left Ear", linewidth=1.5)
+    bark_edges = [
+        0, 100, 200, 300, 400, 510, 630, 770, 920, 1080, 1270, 1480,
+        1720, 2000, 2320, 2700, 3150, 3700, 4400, 5300, 6400, 7700,
+        9500, 12000, 15500, 20000
+    ]
+
+    for i in range(len(bark_edges) - 1):
+        low = bark_edges[i]
+        high = bark_edges[i + 1]
+
+        if low > max_freq:
+            break
+        high = min(high, max_freq)
+
+        alpha_val = 0.15 if i % 2 == 0 else 0.05
+        ax.axvspan(low, high, color='gray', alpha=alpha_val)
+
+        ax.axvline(high, color='black', linestyle=':', alpha=0.3)
+
     line_right, = ax.plot([], [], color="blue", label="Right Ear", linewidth=1.5)
     ax.legend()
 
