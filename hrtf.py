@@ -41,12 +41,12 @@ def peak_similarity(curve_one, curve_two, f_tol=10, m_tol=4): # boolean function
 
     return True
 
-def run_analysis(curves):
+def run_analysis(curves, sr, fft_size, bark_tol=0.2, mag_tol=1.0):
+    peaks_per_frame = [get_peaks(c) for c in curves]
+
     phases = [[]]
-
     for c in range(len(curves)):
-        phases[-1].append(get_peaks(curves[c]))
-
+        phases[-1].append(peaks_per_frame[c])
         if c < len(curves) - 1 and not peak_similarity(curves[c], curves[c+1]):
             phases.append([])
 
@@ -58,17 +58,15 @@ def run_analysis(curves):
         initial = phase[0]
         n_points = len(initial)
 
-        freq_changes = [[] for _ in range(n_points)]
-        mag_changes = [[] for _ in range(n_points)]
+        freq_changes = []
+        mag_changes = []
 
-        for t in range(1, len(phase)):
-            prev = phase[t-1]
-            curr = phase[t]
-            for k in range(n_points):
-                f_prev, m_prev = prev[k]
-                f_curr, m_curr = curr[k]
-                freq_changes[k].append(f_curr - f_prev)
-                mag_changes[k].append(m_curr - m_prev)
+        for k in range(n_points):
+            bins_k = [frame[k][0] for frame in phase]
+            mags_k = [frame[k][1] for frame in phase]
+
+            freq_changes.append(simplify_freq_track(bins_k, sr, fft_size, bark_tol))
+            mag_changes.append(simplify_mag_track(mags_k, mag_tol))
 
         results.append({
             'initial': initial,
