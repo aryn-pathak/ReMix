@@ -6,7 +6,6 @@ bark_edges = [
     9500, 12000, 15500, 20000
 ]
 
-
 def get_peaks(curve, threshold=1.5, slope_tol=0.5):
     deltas = [curve[i] - curve[i-1] for i in range(1, len(curve))]
 
@@ -40,6 +39,37 @@ def peak_similarity(curve_one, curve_two, f_tol=10, m_tol=4): # boolean function
             return False
 
     return True
+
+def simplify_freq_track(bins, sr, fft_size, bark_tol=0.2):
+
+    barks = np.interp(np.array(bins) * sr / fft_size,
+                      bark_edges, np.arange(len(bark_edges)))
+
+    simplified = [bins[0]]
+    anchor = 0                      # frame index of last committed position
+
+    for t in range(1, len(bins)):
+        if abs(barks[t] - barks[anchor]) > bark_tol:
+            simplified.append(bins[t])
+            anchor = t
+        else:
+            simplified.append(simplified[-1])
+
+    return [simplified[t] - simplified[0] for t in range(1, len(simplified))]
+
+def simplify_mag_track(mags, mag_tol=1.0):
+
+    simplified = [mags[0]]
+    anchor = 0
+
+    for t in range(1, len(mags)):
+        if abs(mags[t] - mags[anchor]) > mag_tol:
+            simplified.append(mags[t])
+            anchor = t
+        else:
+            simplified.append(simplified[-1])
+
+    return [simplified[t] - simplified[0] for t in range(1, len(simplified))]
 
 def run_analysis(curves, sr, fft_size, bark_tol=0.2, mag_tol=1.0):
     peaks_per_frame = [get_peaks(c) for c in curves]
@@ -75,34 +105,3 @@ def run_analysis(curves, sr, fft_size, bark_tol=0.2, mag_tol=1.0):
         })
 
     return results
-
-def simplify_freq_track(bins, sr, fft_size, bark_tol=0.2):
-
-    barks = np.interp(np.array(bins) * sr / fft_size,
-                      bark_edges, np.arange(len(bark_edges)))
-
-    simplified = [bins[0]]
-    anchor = 0                      # frame index of last committed position
-
-    for t in range(1, len(bins)):
-        if abs(barks[t] - barks[anchor]) > bark_tol:
-            simplified.append(bins[t])
-            anchor = t
-        else:
-            simplified.append(simplified[-1])
-
-    return [simplified[t] - simplified[t-1] for t in range(1, len(simplified))]
-
-def simplify_mag_track(mags, mag_tol=1.0):
-
-    simplified = [mags[0]]
-    anchor = 0
-
-    for t in range(1, len(mags)):
-        if abs(mags[t] - mags[anchor]) > mag_tol:
-            simplified.append(mags[t])
-            anchor = t
-        else:
-            simplified.append(simplified[-1])
-
-    return [simplified[t] - simplified[t-1] for t in range(1, len(simplified))]
