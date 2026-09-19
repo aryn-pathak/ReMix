@@ -19,7 +19,7 @@ def get_peaks(curve, threshold=1.5, slope_tol=0.5):
 
     return [(idx, curve[idx]) for idx in sorted(significant)]
 
-def peak_similarity(curve_one, curve_two, f_tol=10, m_tol=4):
+def peak_similarity(curve_one, curve_two, f_tol=10, m_tol=4): # boolean function
     peaks_curve_one = get_peaks(curve_one)
     peaks_curve_two = get_peaks(curve_two)
 
@@ -33,3 +33,14 @@ def peak_similarity(curve_one, curve_two, f_tol=10, m_tol=4):
             return False
 
     return True
+
+def run_analysis(curves): # list of curves
+    phases = [[]]
+    phase = 1
+    for c in range(len(curves)):
+        if peak_similarity(curves[c], curves[c+1]):
+            phases[phase].append(get_peaks(curves[c]))
+        if not peak_similarity(curves[c], curves[c+1]):
+            phases.append([])
+            phase += 1
+            phases[phase].append(get_peaks(curves[c]))
