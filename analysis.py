@@ -5,6 +5,7 @@ from matplotlib.animation import FuncAnimation
 
 N = 256  # no of samples in a measurement
 T = 256 / 48000 * 1000  # length of a measurement in ms (48kHz sampling rate)
+freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
 
 sofa = sf.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
@@ -102,7 +103,6 @@ def plot_freq_diff(az, el):
 
 def plot_freq(az, el, max_freq=20000):
     right_freq, left_freq = get_freq(az, el)
-    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= max_freq
 
     left_smooth = smooth_fractional_octave(freqAxis, left_freq, fraction=3)
@@ -121,7 +121,6 @@ def plot_freq(az, el, max_freq=20000):
 
 # heatmap of ILD
 def plot_heatmap_diff():
-    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
     freqs = freqAxis[mask]
 
@@ -146,7 +145,6 @@ def plot_heatmap_diff():
 
 # plots heatmap of left and right IRs separately
 def plot_heatmap():
-    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
     freqs = freqAxis[mask]
 
@@ -184,7 +182,6 @@ def plot_heatmap_avg():
     elevation = sources[:, 1]
     idx = np.where(np.isclose(elevation, 0, atol=1e-5))[0]
     azimuth = np.sort(sources[idx, 0])
-    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
 
     freqs = freqAxis[mask]
@@ -208,8 +205,6 @@ def plot_heatmap_avg():
     plt.show()
 
 def animate_freq_diff(az_list, el, interval=200, save_path=None):
-
-    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
     freqs = freqAxis[mask]
 
@@ -344,7 +339,6 @@ def animate_freq(az_list, el, max_freq=20000, interval=200, save_path=None):
     return anim
 
 def animate_freq_avg(az_list, el, max_freq=20000, interval=200, save_path=None):
-    freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= max_freq
     freqs = freqAxis[mask]
 
