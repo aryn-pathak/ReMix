@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.interpolate import PchipInterpolator
+from analysis import freqAxis as freq_axis
 
 bark_edges = [
     0, 100, 200, 300, 400, 510, 630, 770, 920, 1080, 1270, 1480,
@@ -41,8 +42,7 @@ def peak_similarity(curve_one, curve_two, f_tol=10, m_tol=4): # boolean function
 
     return True
 
-def simplify_freq_track(bins, sr, fft_size, bark_tol=0.2):
-
+def simplify_freq_track(bins, bark_tol=0.2, sr=48000, fft_size=256):
     barks = np.interp(np.array(bins) * sr / fft_size,
                       bark_edges, np.arange(len(bark_edges)))
 
