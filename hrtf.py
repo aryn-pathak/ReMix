@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.interpolate import PchipInterpolator
 
 bark_edges = [
     0, 100, 200, 300, 400, 510, 630, 770, 920, 1080, 1270, 1480,
@@ -121,3 +122,10 @@ def reconstruct(n, deconstructed): # curve number
                                 m + phase['mag_changes'][k][idx-1])
             break
         c += length
+
+    peaks.sort(key=lambda p: p[0])
+    freqs = [p[0] for p in peaks]
+    mags = [p[1] for p in peaks]
+
+    interpolator = PchipInterpolator(freqs, mags)
+    return interpolator(freq_axis)
