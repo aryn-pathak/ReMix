@@ -105,3 +105,19 @@ def run_analysis(curves, sr, fft_size, bark_tol=0.2, mag_tol=1.0):
         })
 
     return results
+
+def reconstruct(n, deconstructed): # curve number
+    c = 0
+    for phase in deconstructed:
+        length = len(phase['freq_changes'][0]) + 1
+        if n < c + length:
+            idx = n - c
+            peaks = list(phase['initial'])
+
+            if idx > 0:
+                for k in range(len(peaks)):
+                    f, m = peaks[k]
+                    peaks[k] = (f + phase['freq_changes'][k][idx-1],
+                                m + phase['mag_changes'][k][idx-1])
+            break
+        c += length
