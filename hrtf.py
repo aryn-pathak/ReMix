@@ -43,4 +43,30 @@ def run_analysis(curves):
         if c < len(curves) - 1 and not peak_similarity(curves[c], curves[c+1]):
             phases.append([])
 
-    return phases
+    results = []
+    for phase in phases:
+        if not phase:
+            continue
+
+        initial = phase[0]
+        n_points = len(initial)
+
+        freq_changes = [[] for _ in range(n_points)]
+        mag_changes = [[] for _ in range(n_points)]
+
+        for t in range(1, len(phase)):
+            prev = phase[t-1]
+            curr = phase[t]
+            for k in range(n_points):
+                f_prev, m_prev = prev[k]
+                f_curr, m_curr = curr[k]
+                freq_changes[k].append(f_curr - f_prev)
+                mag_changes[k].append(m_curr - m_prev)
+
+        results.append({
+            'initial': initial,
+            'freq_changes': freq_changes,
+            'mag_changes': mag_changes,
+        })
+
+    return results
