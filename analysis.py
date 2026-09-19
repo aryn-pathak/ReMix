@@ -76,7 +76,7 @@ def smooth_fractional_octave(freq, mag_db, fraction=3):
         smoothed[i] = np.mean(mag_db[mask])
     return smoothed
 
-def plot_freqDiff(az, el):
+def plot_freq_diff(az, el):
     right_freq, left_freq = get_freq(az, el)
     plt.xlabel("frequency (Hz)")
     plt.ylabel("absolute magnitude difference")
@@ -120,7 +120,7 @@ def plot_freq(az, el, max_freq=20000):
     plt.show()
 
 # heatmap of ILD
-def plot_heatmapDiff():
+def plot_heatmap_diff():
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
     freqs = freqAxis[mask]
@@ -180,7 +180,7 @@ def plot_heatmap():
     fig.colorbar(c2, ax=axs, label='Amplitude', pad=0.1)
     plt.show()
 
-def plot_heatmapAvg():
+def plot_heatmap_avg():
     elevation = sources[:, 1]
     idx = np.where(np.isclose(elevation, 0, atol=1e-5))[0]
     azimuth = np.sort(sources[idx, 0])
@@ -207,7 +207,7 @@ def plot_heatmapAvg():
     plt.colorbar(c, ax=ax, label='Arithmetic average of left and right', pad=0.1)
     plt.show()
 
-def animate_freqDiff(az_list, el, interval=200, save_path=None):
+def animate_freq_diff(az_list, el, interval=200, save_path=None):
 
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
@@ -343,7 +343,7 @@ def animate_freq(az_list, el, max_freq=20000, interval=200, save_path=None):
 
     return anim
 
-def animate_freqAvg(az_list, el, max_freq=20000, interval=200, save_path=None):
+def animate_freq_avg(az_list, el, max_freq=20000, interval=200, save_path=None):
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= max_freq
     freqs = freqAxis[mask]
@@ -398,16 +398,13 @@ def animate_freqAvg(az_list, el, max_freq=20000, interval=200, save_path=None):
 
     return anim
 
-# az_list = np.arange(0, 360, 1)
-# anim = animate_freq(az_list, el=0)
-
 def plot_error():
     freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
     mask = freqAxis <= 20000
 
     all_curves = []
     for az in az_list:
-        curve = smooth_fractional_octave(freqAxis, get_freq(az, 0), fraction=3)
+        curve = smooth_fractional_octave(freqAxis, get_freq(az, 0)[0], fraction=3)
         all_curves.append(curve[mask])  # Mask applied once
 
     all_curves = np.array(all_curves)
@@ -431,4 +428,5 @@ def plot_error():
     plt.grid(True, linestyle=":", alpha=0.6)
     plt.show()
 
-plot_error()
+az_list = np.arange(0, 360, 1)
+anim = animate_freq(az_list, el=0)
