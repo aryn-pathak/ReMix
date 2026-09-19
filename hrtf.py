@@ -1,21 +1,23 @@
 import numpy as np
 
-def get_peaks(curve, threshold=1.5):
+def get_peaks(curve, threshold=1.5, slope_tol=0.5):
     deltas = [curve[i] - curve[i-1] for i in range(1, len(curve))]
 
-    tp_index = []
+    significant = {0, len(curve)-1}
+
     for i in range(len(deltas)-1):
-        if deltas[i]*deltas[i+1] < 0:
-            tp_index.append(i+1)
+        idx = i + 1
 
-    filtered = []
-    for idx in tp_index:
-        left_jump = abs(curve[idx] - curve[idx-1])
-        right_jump = abs(curve[idx] - curve[idx+1])
-        if left_jump >= threshold or right_jump >= threshold:
-            filtered.append((idx, curve[idx]))
+        if deltas[i] * deltas[i+1] < 0:
+            left_jump = abs(curve[idx] - curve[idx-1])
+            right_jump = abs(curve[idx] - curve[idx+1])
+            if left_jump >= threshold or right_jump >= threshold:
+                significant.add(idx)
 
-    return filtered
+        elif abs(deltas[i+1] - deltas[i]) > slope_tol:
+            significant.add(idx)
+
+    return [(idx, curve[idx]) for idx in sorted(significant)]
 
 def peak_similarity(curve_one, curve_two, f_tol=10, m_tol=4):
     peaks_curve_one = get_peaks(curve_one)
