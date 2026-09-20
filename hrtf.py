@@ -1,12 +1,20 @@
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 from analysis import freqAxis as freq_axis
+from analysis import az_list
+from analysis import get_freq, smooth_fractional_octave
 
 bark_edges = [
     0, 100, 200, 300, 400, 510, 630, 770, 920, 1080, 1270, 1480,
     1720, 2000, 2320, 2700, 3150, 3700, 4400, 5300, 6400, 7700,
     9500, 12000, 15500, 20000
 ]
+
+mask = freq_axis <= 20000
+curves = []
+for az in az_list:
+    right_freq, _ = get_freq(az, 0)
+    curves.append(smooth_fractional_octave(freq_axis, right_freq, fraction=3)[mask])
 
 def get_peaks(curve, threshold=1.5, slope_tol=0.5):
     deltas = [curve[i] - curve[i-1] for i in range(1, len(curve))]
