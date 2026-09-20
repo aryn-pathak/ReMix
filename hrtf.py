@@ -129,3 +129,9 @@ def reconstruct(n, deconstructed): # curve number
 
     interpolator = PchipInterpolator(freqs, mags)
     return interpolator(freq_axis)
+
+def choose_n(az, ear): # R or L
+    if ear == 'R':
+        return az_list.index(az)
+    else:
+        return az_list.index(360-az)
