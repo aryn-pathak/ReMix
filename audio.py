@@ -6,7 +6,7 @@ import scipy.signal as signal
 
 N = 256  # no of samples in a measurement
 T = 256 / 48000 * 1000  # length of a measurement in ms (48kHz sampling rate)
-freqAxis = np.fft.rfftfreq(n=N, d=1 / 48000)
+r_ref = 1.0
 
 sofa = s.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
@@ -25,3 +25,7 @@ def apply_IR(az, el, wave):
     left = signal.fftconvolve(wave, left_IR)
     right = signal.fftconvolve(wave, right_IR)
     return left, right
+
+def apply_falloff(dist, wave):
+    gain = r_ref / max(dist, r_ref)
+    return wave * gain
