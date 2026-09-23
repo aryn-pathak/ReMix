@@ -1,7 +1,7 @@
 import numpy as np
 import sofar as sf
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FuncAnimation, FFMpegWriter
 
 N = 256  # no of samples in a measurement
 T = 256 / 48000 * 1000  # length of a measurement in ms (48kHz sampling rate)
@@ -259,7 +259,7 @@ def animate_freq_diff(az_list, el, interval=200, save_path=None):
 
     return anim  # keep a reference so it doesn't get garbage-collected
 
-def animate_freq(az_list, el, max_freq=20000, interval=200, save_path=None):
+def animate_freq(az_list, el, max_freq=20000, interval=200, save_path="animate_freq.mp4"):
     mask = freqAxis <= max_freq
     freqs = freqAxis[mask]
 
@@ -328,13 +328,6 @@ def animate_freq(az_list, el, max_freq=20000, interval=200, save_path=None):
         return line_right, title
 
     anim = FuncAnimation(fig, update, frames=len(az_list), interval=interval, blit=False)
-
-    if save_path:
-        anim.save(save_path)
-    else:
-        plt.show()
-
-    return anim
 
 def animate_freq_avg(az_list, el, max_freq=20000, interval=200, save_path=None):
     mask = freqAxis <= max_freq
@@ -421,4 +414,6 @@ def plot_error():
     plt.show()
 
 # az_list = np.arange(0, 360, 1)
-# anim = animate_freq(az_list, el=0)
+# anim = animate_freq(az_list, el=0, save_path="animate_freq.mp4")
+
+plot_error()
