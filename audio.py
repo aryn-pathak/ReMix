@@ -8,6 +8,7 @@ import scipy.signal as signal
 N = 256  # no of samples in a measurement
 T = 256 / 48000 * 1000  # length of a measurement in ms (48kHz sampling rate)
 r_ref = 1.0
+SR=48000
 
 sofa = s.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
@@ -31,7 +32,27 @@ def apply_falloff(dist, wave):
     gain = r_ref / max(dist, r_ref)
     return wave * gain
 
-absorption_dbm = {125.0: 0.0004, 250.0: 0.0013, 500.0: 0.0027, 1000.0: 0.0047, 1400.0: 0.0064, 2000.0: 0.0099, 2800.0: 0.0163, 4000.0: 0.0297, 5600.0: 0.0544, 8000.0: 0.1053, 11300.0: 0.1983, 16000.0: 0.3645}
+absorption_dbm = {125.0: -0.0004, 250.0: -0.0013, 500.0: -0.0027, 1000.0: -0.0047, 1400.0: -0.0064, 2000.0: -0.0099, 2800.0: -0.0163, 4000.0: -0.0297, 5600.0: -0.0544, 8000.0: -0.1053, 11300.0: -0.1983, 16000.0: -0.3645}
 
 def k(freq, db):
     return 10^(db/20) - (2*math.cos(2*math.pi*freq)/SR)
+
+def apply_filter(wave, k):
+    result = []
+    for n in range(len(wave)):
+        filtered_sample = wave[n] + k*wave[n-1] + wave[n-2]
+        result.append(filtered_sample)
+
+    return result
+
+def apply_eq(dict, wave): # a dict like absorption_dbm which has frequencies and decibel boosts/cuts. +ve means boost, -ve means cuts.
+
+    rp = wave
+    rn = []
+
+    for freq in dict:
+        rn = apply_filter(rp, k(freq, dict.freq))
+        rp = rn
+        rn = []
+
+    return rn
