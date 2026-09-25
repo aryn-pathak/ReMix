@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import sofar as s
 import soundfile as sf
@@ -29,3 +30,5 @@ def apply_IR(az, el, wave):
 def apply_falloff(dist, wave):
     gain = r_ref / max(dist, r_ref)
     return wave * gain
+
+absorption_dbm = {125.0: 0.0004, 250.0: 0.0013, 500.0: 0.0027, 1000.0: 0.0047, 1400.0: 0.0064, 2000.0: 0.0099, 2800.0: 0.0163, 4000.0: 0.0297, 5600.0: 0.0544, 8000.0: 0.1053, 11300.0: 0.1983, 16000.0: 0.3645}
