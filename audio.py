@@ -35,24 +35,26 @@ def apply_falloff(dist, wave):
 absorption_dbm = {125.0: -0.0004, 250.0: -0.0013, 500.0: -0.0027, 1000.0: -0.0047, 1400.0: -0.0064, 2000.0: -0.0099, 2800.0: -0.0163, 4000.0: -0.0297, 5600.0: -0.0544, 8000.0: -0.1053, 11300.0: -0.1983, 16000.0: -0.3645}
 
 def k(freq, db):
-    return 10^(db/20) - (2*math.cos(2*math.pi*freq)/SR)
+    return 10**(db/20) - (2*math.cos(2*math.pi*freq/SR))
 
 def apply_filter(wave, k):
     result = []
     for n in range(len(wave)):
-        filtered_sample = wave[n] + k*wave[n-1] + wave[n-2]
+        x1 = wave[n - 1] if n - 1 >= 0 else 0
+        x2 = wave[n - 2] if n - 2 >= 0 else 0
+        filtered_sample = wave[n] + k * x1 + x2
         result.append(filtered_sample)
 
     return result
 
-def apply_eq(dict, wave): # a dict like absorption_dbm which has frequencies and decibel boosts/cuts. +ve means boost, -ve means cuts.
+def apply_eq(bands, wave): # a dict like absorption_dbm which has frequencies and decibel boosts/cuts. +ve means boost, -ve means cuts.
 
     rp = wave
     rn = []
 
-    for freq in dict:
-        rn = apply_filter(rp, k(freq, dict.freq))
+    for freq in bands:
+        rn = apply_filter(rp, k(freq, bands[freq]))
         rp = rn
         rn = []
 
-    return rn
+    return rp
