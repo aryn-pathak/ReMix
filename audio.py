@@ -37,6 +37,20 @@ absorption_dbm = {125.0: -0.0004, 250.0: -0.0013, 500.0: -0.0027, 1000.0: -0.004
 def k(freq, db):
     return 10**(db/20) - (2*math.cos(2*math.pi*freq/SR))
 
+def q_from_bandwidth_octaves(bw_octaves):
+    return 1 / (2 * math.sinh(math.log(2) / 2 * bw_octaves))
+
+def band_q(freqs, i):
+    if len(freqs) == 1:
+        return 1.41  # fallback, nothing to reference
+    if i == 0:
+        bw = math.log2(freqs[1] / freqs[0])
+    elif i == len(freqs) - 1:
+        bw = math.log2(freqs[i] / freqs[i - 1])
+    else:
+        bw = 0.5 * math.log2(freqs[i + 1] / freqs[i - 1])
+    return q_from_bandwidth_octaves(bw)
+
 def peaking_coeffs(freq, db, q):
 
     A = 10 ** (db / 40)
@@ -66,10 +80,13 @@ def apply_filter(wave, coeffs):
 
     return result
 
-def apply_eq(bands, wave, q=1.41):
+def apply_eq(bands, wave):
     # bands: {frequency: dB}, +ve boosts, -ve cuts
+    # Q is now derived per-band from neighbor spacing instead of fixed
+    freqs = sorted(bands)
     result = wave
-    for freq in bands:
+    for i, freq in enumerate(freqs):
+        q = band_q(freqs, i)
         result = apply_filter(result, peaking_coeffs(freq, bands[freq], q))
 
     return result
