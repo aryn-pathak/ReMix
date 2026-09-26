@@ -49,12 +49,6 @@ def apply_filter(wave, k):
 
 def apply_eq(bands, wave): # a dict like absorption_dbm which has frequencies and decibel boosts/cuts. +ve means boost, -ve means cuts.
 
-    rp = wave
-    rn = []
-
+    x = wave
     for freq in bands:
-        rn = apply_filter(rp, k(freq, bands[freq]))
-        rp = rn
-        rn = []
-
-    return rp
+        x = apply_filter(x, k(freq, bands[freq]))
