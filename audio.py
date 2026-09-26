@@ -37,18 +37,39 @@ absorption_dbm = {125.0: -0.0004, 250.0: -0.0013, 500.0: -0.0027, 1000.0: -0.004
 def k(freq, db):
     return 10**(db/20) - (2*math.cos(2*math.pi*freq/SR))
 
-def apply_filter(wave, k):
+def peaking_coeffs(freq, db, q):
+
+    A = 10 ** (db / 40)
+    w0 = 2 * math.pi * freq / SR
+    alpha = math.sin(w0) / (2 * q)
+    cos_w0 = math.cos(w0)
+
+    b0 = 1 + alpha * A
+    b1 = -2 * cos_w0
+    b2 = 1 - alpha * A
+    a0 = 1 + alpha / A
+    a1 = -2 * cos_w0
+    a2 = 1 - alpha / A
+
+    return b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0
+
+def apply_filter(wave, coeffs):
+    b0, b1, b2, a1, a2 = coeffs
     result = []
     for n in range(len(wave)):
         x1 = wave[n - 1] if n - 1 >= 0 else 0
         x2 = wave[n - 2] if n - 2 >= 0 else 0
-        filtered_sample = wave[n] + k * x1 + x2
+        y1 = result[n - 1] if n - 1 >= 0 else 0  # outputs already computed
+        y2 = result[n - 2] if n - 2 >= 0 else 0
+        filtered_sample = b0 * wave[n] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
         result.append(filtered_sample)
 
     return result
 
-def apply_eq(bands, wave): # a dict like absorption_dbm which has frequencies and decibel boosts/cuts. +ve means boost, -ve means cuts.
-
-    x = wave
+def apply_eq(bands, wave, q=1.41):
+    # bands: {frequency: dB}, +ve boosts, -ve cuts
+    result = wave
     for freq in bands:
-        x = apply_filter(x, k(freq, bands[freq]))
+        result = apply_filter(result, peaking_coeffs(freq, bands[freq], q))
+
+    return result
