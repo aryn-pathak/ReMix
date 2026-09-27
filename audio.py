@@ -90,3 +90,31 @@ def apply_eq(bands, wave):
         result = apply_filter(result, peaking_coeffs(freq, bands[freq], q))
 
     return result
+
+def apply_air_absorption(wave, dist): # meters
+    bands = {k: v * dist for k, v in absorption_dbm.items()}
+    return apply_eq(bands, wave)
+
+def room_reverb(wave):
+    v = ROOM_DIMENSIONS["height"]*ROOM_DIMENSIONS["width"]*ROOM_DIMENSIONS["length"]
+    a = (ROOM_DIMENSIONS["height"]*ROOM_DIMENSIONS["width"] + ROOM_DIMENSIONS["height"]*ROOM_DIMENSIONS["length"])*A["walls"] + ROOM_DIMENSIONS["length"]*ROOM_DIMENSIONS["width"]*A["floor"] + ROOM_DIMENSIONS["length"]*ROOM_DIMENSIONS["width"]*A["ceiling"]
+    rts = 0.161*v*a # RT60 reverberation (s)
+    truncate_samples = rts*SR
+
+    max_dist = math.sqrt(ROOM_DIMENSIONS["height"]**2 +ROOM_DIMENSIONS["width"]**2 +ROOM_DIMENSIONS["length"]**2)/2
+    min_dist = ROOM_DIMENSIONS["width"]/2
+
+    comb_filters = []
+
+    for i in range(6):
+        d = random.randint(min_dist, max_dist)
+        t = 2*d/343
+        g = 10^(-3*t/rts)
+        M = t*SR
+
+        y = []
+        for n in range(len(wave)):
+            y.append(wave[n] + g * y[n - M])
+
+        comb_filters.append(y)
+    return np.sum(comb_filters, axis=0)
