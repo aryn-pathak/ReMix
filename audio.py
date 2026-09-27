@@ -21,7 +21,10 @@ A = {
     "ceiling" : 0.80,
     "floor" : 0.15,
     "walls" : 0.03
-} # sound absorption constant # meters
+} # sound absorption constant
+
+L_COORDS = ()
+S_COORDS = ()
 
 sofa = s.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
@@ -157,3 +160,42 @@ def apply_drr(wave, dist):
 
     rev_gain = 4*dist*math.sqrt(math.pi/a)
     return [n * rev_gain for n in room_reverb(wave)]
+
+def early_reflections(wave):
+    size = (ROOM_DIMENSIONS["length"], ROOM_DIMENSIONS["width"], ROOM_DIMENSIONS["height"])
+
+    def distance(p, q):
+        return math.sqrt((q[0]-p[0])**2 + (q[1]-p[1])**2 + (q[2]-p[2])**2)
+
+    def image(k):
+        axis = k // 2
+        wall = 0.0 if k % 2 == 0 else size[axis]
+        p = list(S_COORDS)
+        p[axis] = 2 * wall - p[axis]
+        return tuple(p)
+
+    SL = distance(S_COORDS, L_COORDS)
+
+    def alpha(k):
+        if k < 4:
+            return A["walls"]
+        return A["floor"] if k == 4 else A["ceiling"]
+
+    def a(k):
+        return math.sqrt(1 - alpha(k)) * SL / distance(image(k), L_COORDS)
+
+    def M(k):
+        return round((distance(image(k), L_COORDS) - SL) * SR / 343)
+
+    taps = [(M(k), a(k)) for k in range(6)]
+    max_delay = max(m for m, _ in taps)
+
+    y = []
+    for n in range(len(wave) + max_delay):
+        term = 0
+        for m, ak in taps:
+            if 0 <= n - m < len(wave):
+                term += ak * wave[n - m]
+        y.append(term)
+
+    return y
