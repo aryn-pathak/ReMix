@@ -85,16 +85,7 @@ def peaking_coeffs(freq, db, q):
 
 def apply_filter(wave, coeffs):
     b0, b1, b2, a1, a2 = coeffs
-    result = []
-    for n in range(len(wave)):
-        x1 = wave[n - 1] if n - 1 >= 0 else 0
-        x2 = wave[n - 2] if n - 2 >= 0 else 0
-        y1 = result[n - 1] if n - 1 >= 0 else 0  # outputs already computed
-        y2 = result[n - 2] if n - 2 >= 0 else 0
-        filtered_sample = b0 * wave[n] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
-        result.append(filtered_sample)
-
-    return result
+    return signal.lfilter([b0, b1, b2], [1, a1, a2], wave)
 
 def apply_eq(bands, wave):
     # bands: {frequency: dB}, +ve boosts, -ve cuts
@@ -144,9 +135,13 @@ def room_reverb(wave):
         t = M / SR
         g = 10 ** (-3 * t / rts)
 
-        y = np.zeros(len(x))
-        for n in range(M, len(x)):
-            y[n] = x[n - M] + g * y[n - M]
+        # y[n] = x[n - M] + g * y[n - M]
+        b = np.zeros(M + 1)
+        b[M] = 1
+        a_c = np.zeros(M + 1)
+        a_c[0] = 1
+        a_c[M] = -g
+        y = signal.lfilter(b, a_c, x)
 
         comb_filters.append(y)
     return np.sum(comb_filters, axis=0)
@@ -190,21 +185,20 @@ def early_reflections(wave):
     taps = [(M(k), a(k)) for k in range(6)]
     max_delay = max(m for m, _ in taps)
 
-    y = []
-    for n in range(len(wave) + max_delay):
-        term = 0
-        for m, ak in taps:
-            if 0 <= n - m < len(wave):
-                term += ak * wave[n - m]
-        y.append(term)
+    b = np.zeros(max_delay + 1)
+    for m, ak in taps:
+        b[m] += ak  # += in case two images share a delay
 
-    return y
+    x = np.concatenate([np.asarray(wave, dtype=float), np.zeros(max_delay)])
+    return signal.lfilter(b, [1], x)
 
 def decorrelate(wave, iacc = 0.6,D = 0.010):
     g = math.sqrt(1-iacc/1+iacc)
-    l = []
-    r = []
-    for n in wave:
-        l.append(wave[n] + g*wave[n-(0.010*SR)])
-        r.append(wave[n] - g*wave[n-(0.010*SR)])
+    d = int(round(D * SR))
+    b_l = np.zeros(d + 1)
+    b_l[0], b_l[d] = 1, g
+    b_r = np.zeros(d + 1)
+    b_r[0], b_r[d] = 1, -g
+    l = signal.lfilter(b_l, [1], wave)
+    r = signal.lfilter(b_r, [1], wave)
     return l, r
