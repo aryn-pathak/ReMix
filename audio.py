@@ -29,6 +29,10 @@ S_COORDS = ()
 sofa = s.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
 
+hrirs = np.asarray(sofa.Data_IR, dtype=float)
+df_energy = np.mean(np.sum(hrirs ** 2, axis=2), axis=0)   # one value per ear
+hrirs /= np.sqrt(df_energy)[None, :, None]
+
 def getir(az, el):
     az_diff = (sources[:, 0] - az + 180) % 360 - 180
     el_diff = sources[:, 1] - el
