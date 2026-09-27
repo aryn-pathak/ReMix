@@ -53,8 +53,9 @@ absorption_dbm = {125.0: -0.0004, 250.0: -0.0013, 500.0: -0.0027, 1000.0: -0.004
 def k(freq, db):
     return 10**(db/20) - (2*math.cos(2*math.pi*freq/SR))
 
-def q_from_bandwidth_octaves(bw_octaves):
-    return 1 / (2 * math.sinh(math.log(2) / 2 * bw_octaves))
+def q_from_bandwidth_octaves(bw_octaves, freq):
+    w0 = 2 * math.pi * freq / SR
+    return 1 / (2 * math.sinh(math.log(2) / 2 * bw_octaves * w0 / math.sin(w0)))
 
 def band_q(freqs, i):
     if len(freqs) == 1:
@@ -65,7 +66,7 @@ def band_q(freqs, i):
         bw = math.log2(freqs[i] / freqs[i - 1])
     else:
         bw = 0.5 * math.log2(freqs[i + 1] / freqs[i - 1])
-    return q_from_bandwidth_octaves(bw)
+    return q_from_bandwidth_octaves(bw, freqs[i])
 
 def peaking_coeffs(freq, db, q):
 
@@ -83,6 +84,23 @@ def peaking_coeffs(freq, db, q):
 
     return b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0
 
+def high_shelf_coeffs(freq, db, q):
+
+    A = 10 ** (db / 40)
+    w0 = 2 * math.pi * freq / SR
+    alpha = math.sin(w0) / (2 * q)
+    cos_w0 = math.cos(w0)
+    sqrt_A = math.sqrt(A)
+
+    b0 = A * ((A + 1) + (A - 1) * cos_w0 + 2 * sqrt_A * alpha)
+    b1 = -2 * A * ((A - 1) + (A + 1) * cos_w0)
+    b2 = A * ((A + 1) + (A - 1) * cos_w0 - 2 * sqrt_A * alpha)
+    a0 = (A + 1) - (A - 1) * cos_w0 + 2 * sqrt_A * alpha
+    a1 = 2 * ((A - 1) - (A + 1) * cos_w0)
+    a2 = (A + 1) - (A - 1) * cos_w0 - 2 * sqrt_A * alpha
+
+    return b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0
+
 def apply_filter(wave, coeffs):
     b0, b1, b2, a1, a2 = coeffs
     return signal.lfilter([b0, b1, b2], [1, a1, a2], wave)
@@ -91,10 +109,31 @@ def apply_eq(bands, wave):
     # bands: {frequency: dB}, +ve boosts, -ve cuts
     # Q is now derived per-band from neighbor spacing instead of fixed
     freqs = sorted(bands)
+    target = np.array([bands[f] for f in freqs], dtype=float)
+
+    def coeffs(i, db):
+        # top band is a high shelf so the cut holds up to Nyquist
+        if i == len(freqs) - 1 and len(freqs) > 1:
+            return high_shelf_coeffs(freqs[i], db, 1 / math.sqrt(2))
+        return peaking_coeffs(freqs[i], db, band_q(freqs, i))
+
+    def band_response(i, db):  # dB of band i's filter at every band centre
+        b0, b1, b2, a1, a2 = coeffs(i, db)
+        _, h = signal.freqz([b0, b1, b2], [1, a1, a2], worN=2 * np.pi * np.array(freqs) / SR)
+        return 20 * np.log10(np.abs(h))
+
+    # bands overlap, so each band's gain != its target; solve for gains whose
+    # combined response hits the target at every centre (Newton, dB isn't linear in gain)
+    gains = target.copy()
+    for _ in range(20):
+        actual = np.sum([band_response(i, g) for i, g in enumerate(gains)], axis=0)
+        interaction = np.column_stack([band_response(i, g + 0.01) - band_response(i, g)
+                                       for i, g in enumerate(gains)]) / 0.01
+        gains += np.linalg.solve(interaction, target - actual)
+
     result = wave
-    for i, freq in enumerate(freqs):
-        q = band_q(freqs, i)
-        result = apply_filter(result, peaking_coeffs(freq, bands[freq], q))
+    for i, g in enumerate(gains):
+        result = apply_filter(result, coeffs(i, g))
 
     return result
 
@@ -130,6 +169,7 @@ def room_reverb(wave):
         delays.add(M)
 
     comb_filters = []
+    energy = 0
 
     for M in sorted(delays):
         t = M / SR
@@ -144,7 +184,8 @@ def room_reverb(wave):
         y = signal.lfilter(b, a_c, x)
 
         comb_filters.append(y)
-    return np.sum(comb_filters, axis=0)
+        energy += 1 / (1 - g ** 2)  # impulse response energy of this comb
+    return np.sum(comb_filters, axis=0) / math.sqrt(energy)
 
 def apply_drr(wave, dist):
     h = ROOM_DIMENSIONS["height"]
@@ -193,12 +234,13 @@ def early_reflections(wave):
     return signal.lfilter(b, [1], x)
 
 def decorrelate(wave, iacc = 0.6,D = 0.010):
-    g = math.sqrt(1-iacc/1+iacc)
+    g = math.sqrt((1-iacc)/(1+iacc))
     d = int(round(D * SR))
     b_l = np.zeros(d + 1)
     b_l[0], b_l[d] = 1, g
     b_r = np.zeros(d + 1)
     b_r[0], b_r[d] = 1, -g
-    l = signal.lfilter(b_l, [1], wave)
-    r = signal.lfilter(b_r, [1], wave)
+    x = np.concatenate([np.asarray(wave, dtype=float), np.zeros(d)])
+    l = signal.lfilter(b_l, [1], x)
+    r = signal.lfilter(b_r, [1], x)
     return l, r
