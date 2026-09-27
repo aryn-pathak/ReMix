@@ -249,3 +249,29 @@ def decorrelate(wave, iacc = 0.6, d = 0.010):
     l = signal.lfilter(b_l, [1], x)
     r = signal.lfilter(b_r, [1], x)
     return l, r
+
+def process_audio(audio_file):
+    audio, SR = sf.read(audio_file, dtype = 'float32', always_2d=True)
+    audio = audio.mean(axis=1)
+    audio = apply_falloff(distance(S_COORDS, L_COORDS), audio)
+    audio = apply_air_absorption(audio, distance(S_COORDS, L_COORDS))
+    l_direct, r_direct = apply_IR(direction(S_COORDS)[0], direction(S_COORDS)[1], audio)
+
+    late_rev = apply_drr(audio, distance(S_COORDS, L_COORDS))
+    l_early, r_early = decorrelate(early_reflections(audio))
+
+    parts_l = [l_direct, l_early, late_rev]
+    parts_r = [r_direct, r_early, late_rev]
+    n = max(len(p) for p in parts_l + parts_r)
+
+    def pad(p):
+        return np.pad(np.asarray(p, dtype=float), (0, n - len(p)))
+
+    left = np.sum([pad(p) for p in parts_l], axis=0)
+    right = np.sum([pad(p) for p in parts_r], axis=0)
+
+    peak = max(np.max(np.abs(left)), np.max(np.abs(right)))
+    if peak > 1:
+        left, right = left / peak, right / peak
+
+    return np.column_stack([left, right])
