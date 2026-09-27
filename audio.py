@@ -199,3 +199,12 @@ def early_reflections(wave):
         y.append(term)
 
     return y
+
+def decorrelate(wave, iacc = 0.6,D = 0.010):
+    g = math.sqrt(1-iacc/1+iacc)
+    l = []
+    r = []
+    for n in wave:
+        l.append(wave[n] + g*wave[n-(0.010*SR)])
+        r.append(wave[n] - g*wave[n-(0.010*SR)])
+    return l, r
