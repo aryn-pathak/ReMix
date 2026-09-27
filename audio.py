@@ -147,3 +147,13 @@ def room_reverb(wave):
 
         comb_filters.append(y)
     return np.sum(comb_filters, axis=0)
+
+def apply_drr(wave, dist):
+    h = ROOM_DIMENSIONS["height"]
+    w = ROOM_DIMENSIONS["width"]
+    l = ROOM_DIMENSIONS["length"]
+
+    a = 2 * (h * w + h * l) * A["walls"] + l * w * A["floor"] + l * w * A["ceiling"]
+
+    rev_gain = 4*dist*math.sqrt(math.pi/a)
+    return [n * rev_gain for n in room_reverb(wave)]
