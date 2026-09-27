@@ -7,9 +7,9 @@ import sounddevice as sd
 import scipy.signal as signal
 
 N = 256  # no of samples in a measurement
-T = 256 / 48000 * 1000  # length of a measurement in ms (48kHz sampling rate)
 r_ref = 1.0
 SR=48000
+T = 256 / SR * 1000  # length of a measurement in ms (48kHz sampling rate)
 
 ROOM_DIMENSIONS = {
     "height" : 8,
@@ -43,6 +43,16 @@ def apply_IR(az, el, wave):
     left = signal.fftconvolve(wave, left_IR)
     right = signal.fftconvolve(wave, right_IR)
     return left, right
+
+def direction(p):
+    # listener faces +x (length), +y (width) is to the left, +z is up
+    dx, dy, dz = (p[i] - L_COORDS[i] for i in range(3))
+    az = math.degrees(math.atan2(dy, dx)) % 360
+    el = math.degrees(math.atan2(dz, math.hypot(dx, dy)))
+    return az, el
+
+def distance(p, q):
+    return math.sqrt((q[0]-p[0])**2 + (q[1]-p[1])**2 + (q[2]-p[2])**2)
 
 def apply_falloff(dist, wave):
     gain = r_ref / max(dist, r_ref)
@@ -191,14 +201,12 @@ def apply_drr(wave, dist):
 
     a = 2 * (h * w + h * l) * A["walls"] + l * w * A["floor"] + l * w * A["ceiling"]
 
-    rev_gain = 4*dist*math.sqrt(math.pi/a)
-    return [n * rev_gain for n in room_reverb(wave)]
+    falloff_gain = r_ref / max(dist, r_ref)
+    rev_gain = 4 * math.sqrt(math.pi / a) / falloff_gain
+    return room_reverb(wave) * rev_gain
 
 def early_reflections(wave):
     size = (ROOM_DIMENSIONS["length"], ROOM_DIMENSIONS["width"], ROOM_DIMENSIONS["height"])
-
-    def distance(p, q):
-        return math.sqrt((q[0]-p[0])**2 + (q[1]-p[1])**2 + (q[2]-p[2])**2)
 
     def image(k):
         axis = k // 2
@@ -220,25 +228,15 @@ def early_reflections(wave):
     def M(k):
         return round((distance(image(k), L_COORDS) - SL) * SR / 343)
 
-    def direction(p):
-        # listener faces +x (length), +y (width) is to the left, +z is up
-        dx, dy, dz = (p[i] - L_COORDS[i] for i in range(3))
-        az = math.degrees(math.atan2(dy, dx)) % 360
-        el = math.degrees(math.atan2(dz, math.hypot(dx, dy)))
-        return az, el
-
-    wave = np.asarray(wave, dtype=float)
     taps = [(M(k), a(k)) for k in range(6)]
     max_delay = max(m for m, _ in taps)
 
-    left, right = 0, 0
-    for k, (m, ak) in enumerate(taps):
-        x = np.zeros(len(wave) + max_delay)
-        x[m:m + len(wave)] = ak * wave
-        l, r = apply_IR(*direction(image(k)), x)
-        left, right = left + l, right + r
+    b = np.zeros(max_delay + 1)
+    for m, ak in taps:
+        b[m] += ak  # += in case two images share a delay
 
-    return left, right
+    x = np.concatenate([np.asarray(wave, dtype=float), np.zeros(max_delay)])
+    return signal.lfilter(b, [1], x)
 
 def decorrelate(wave, iacc = 0.6, d = 0.010):
     g = math.sqrt((1-iacc)/(1+iacc))
