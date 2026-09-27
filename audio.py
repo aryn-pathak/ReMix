@@ -1,4 +1,5 @@
 import math
+import random
 import numpy as np
 import sofar as s
 import soundfile as sf
@@ -9,6 +10,18 @@ N = 256  # no of samples in a measurement
 T = 256 / 48000 * 1000  # length of a measurement in ms (48kHz sampling rate)
 r_ref = 1.0
 SR=48000
+
+ROOM_DIMENSIONS = {
+    "height" : 8,
+    "length" : 12,
+    "width" : 10
+} # meters
+
+A = {
+    "ceiling" : 0.80,
+    "floor" : 0.15,
+    "walls" : 0.03
+} # sound absorption constant # meters
 
 sofa = s.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
@@ -96,25 +109,41 @@ def apply_air_absorption(wave, dist): # meters
     return apply_eq(bands, wave)
 
 def room_reverb(wave):
-    v = ROOM_DIMENSIONS["height"]*ROOM_DIMENSIONS["width"]*ROOM_DIMENSIONS["length"]
-    a = (ROOM_DIMENSIONS["height"]*ROOM_DIMENSIONS["width"] + ROOM_DIMENSIONS["height"]*ROOM_DIMENSIONS["length"])*A["walls"] + ROOM_DIMENSIONS["length"]*ROOM_DIMENSIONS["width"]*A["floor"] + ROOM_DIMENSIONS["length"]*ROOM_DIMENSIONS["width"]*A["ceiling"]
-    rts = 0.161*v*a # RT60 reverberation (s)
-    truncate_samples = rts*SR
+    def is_prime(k):
+        return k > 1 and all(k % p for p in range(2, int(k ** 0.5) + 1))
 
-    max_dist = math.sqrt(ROOM_DIMENSIONS["height"]**2 +ROOM_DIMENSIONS["width"]**2 +ROOM_DIMENSIONS["length"]**2)/2
-    min_dist = ROOM_DIMENSIONS["width"]/2
+    h = ROOM_DIMENSIONS["height"]
+    w = ROOM_DIMENSIONS["width"]
+    l = ROOM_DIMENSIONS["length"]
+
+    v = h * w * l
+    a = 2 * (h * w + h * l) * A["walls"] + l * w * A["floor"] + l * w * A["ceiling"]
+    rts = 0.161 * v / a
+    truncate_samples = int(rts * SR)
+
+    x = np.concatenate([np.asarray(wave, dtype=float), np.zeros(truncate_samples)])
+
+    max_dist = math.sqrt(h**2 + w**2 + l**2) / 2
+    min_dist = min(h, w, l) / 2
+    rng = random.Random(0)
+    delays = set()
+    while len(delays) < 6:
+        d = rng.uniform(min_dist, max_dist)
+        t = 2 * d / 343
+        M = round(t * SR)
+        while not is_prime(M):
+            M += 1
+        delays.add(M)
 
     comb_filters = []
 
-    for i in range(6):
-        d = random.randint(min_dist, max_dist)
-        t = 2*d/343
-        g = 10^(-3*t/rts)
-        M = t*SR
+    for M in sorted(delays):
+        t = M / SR
+        g = 10 ** (-3 * t / rts)
 
-        y = []
-        for n in range(truncate_samples):
-            y.append(wave[n] + g * y[n - M])
+        y = np.zeros(len(x))
+        for n in range(M, len(x)):
+            y[n] = x[n - M] + g * y[n - M]
 
         comb_filters.append(y)
     return np.sum(comb_filters, axis=0)
