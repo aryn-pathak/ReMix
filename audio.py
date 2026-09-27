@@ -37,10 +37,7 @@ def getir(az, el):
     az_diff = (sources[:, 0] - az + 180) % 360 - 180
     el_diff = sources[:, 1] - el
     bestM = np.argmin(az_diff ** 2 + el_diff ** 2)
-    left_IR = sofa.Data_IR[bestM, 0, :]
-    right_IR = sofa.Data_IR[bestM, 1, :]
-
-    return left_IR, right_IR
+    return hrirs[bestM, 0, :], hrirs[bestM, 1, :]
 
 def apply_IR(az, el, wave):
     left_IR, right_IR = getir(az, el)
@@ -152,9 +149,22 @@ def apply_air_absorption(wave, dist): # meters
     bands = {k: v * dist for k, v in absorption_dbm.items()}
     return apply_eq(bands, wave)
 
+def allpass(x, M, g=0.7):
+    # Schroeder allpass: y[n] = -g*x[n] + x[n-M] + g*y[n-M]
+    b = np.zeros(M + 1)
+    b[0], b[M] = -g, 1
+    a = np.zeros(M + 1)
+    a[0], a[M] = 1, -g
+    return signal.lfilter(b, a, x)
+
 def room_reverb(wave):
     def is_prime(k):
         return k > 1 and all(k % p for p in range(2, int(k ** 0.5) + 1))
+
+    def next_prime(k):
+        while not is_prime(k):
+            k += 1
+        return k
 
     h = ROOM_DIMENSIONS["height"]
     w = ROOM_DIMENSIONS["width"]
@@ -165,38 +175,27 @@ def room_reverb(wave):
     rts = 0.161 * v / a
     truncate_samples = int(rts * SR)
 
-    x = np.concatenate([np.asarray(wave, dtype=float), np.zeros(truncate_samples)])
-
     max_dist = math.sqrt(h**2 + w**2 + l**2) / 2
     min_dist = min(h, w, l) / 2
     rng = random.Random(0)
     delays = set()
     while len(delays) < 6:
         d = rng.uniform(min_dist, max_dist)
-        t = 2 * d / 343
-        M = round(t * SR)
-        while not is_prime(M):
-            M += 1
-        delays.add(M)
+        delays.add(next_prime(round(2 * d / 343 * SR)))
 
-    comb_filters = []
-    energy = 0
-
+    # parallel combs: sparse, decaying spikes
+    ir = np.zeros(truncate_samples)
     for M in sorted(delays):
-        t = M / SR
-        g = 10 ** (-3 * t / rts)
+        g = 10 ** (-3 * (M / SR) / rts)
+        k = np.arange(1, (truncate_samples - 1) // M + 1)
+        ir[k * M] += g ** (k - 1)
 
-        # y[n] = x[n - M] + g * y[n - M]
-        b = np.zeros(M + 1)
-        b[M] = 1
-        a_c = np.zeros(M + 1)
-        a_c[0] = 1
-        a_c[M] = -g
-        y = signal.lfilter(b, a_c, x)
+    # series allpasses: smear each spike into a dense cluster
+    for t in (0.005, 0.0017):
+        ir = allpass(ir, next_prime(round(t * SR)))
 
-        comb_filters.append(y)
-        energy += 1 / (1 - g ** 2)  # impulse response energy of this comb
-    return np.sum(comb_filters, axis=0) / math.sqrt(energy)
+    ir /= math.sqrt(np.sum(ir ** 2))   # unit energy, keeps apply_drr calibrated
+    return signal.fftconvolve(np.asarray(wave, dtype=float), ir)
 
 def apply_drr(wave, dist):
     h = ROOM_DIMENSIONS["height"]
@@ -227,7 +226,7 @@ def early_reflections(wave):
         return A["floor"] if k == 4 else A["ceiling"]
 
     def a(k):
-        return math.sqrt(1 - alpha(k)) * SL / distance(image(k), L_COORDS)
+        return math.sqrt(1 - alpha(k)) * max(SL, r_ref) / distance(image(k), L_COORDS)
 
     def M(k):
         return round((distance(image(k), L_COORDS) - SL) * SR / 343)
@@ -255,17 +254,17 @@ def decorrelate(wave, iacc = 0.6, d = 0.010):
     return l, r
 
 def process_audio(audio_file):
-    audio, SR = sf.read(audio_file, dtype = 'float32', always_2d=True)
+    audio = sf.read(audio_file, dtype = 'float32', always_2d=True)[0]
     audio = audio.mean(axis=1)
     audio = apply_falloff(distance(S_COORDS, L_COORDS), audio)
     audio = apply_air_absorption(audio, distance(S_COORDS, L_COORDS))
     l_direct, r_direct = apply_IR(direction(S_COORDS)[0], direction(S_COORDS)[1], audio)
 
-    late_rev = apply_drr(audio, distance(S_COORDS, L_COORDS))
+    late_rev_L, late_rev_R = decorrelate((audio, distance(S_COORDS, L_COORDS)))
     l_early, r_early = decorrelate(early_reflections(audio))
 
-    parts_l = [l_direct, l_early, late_rev]
-    parts_r = [r_direct, r_early, late_rev]
+    parts_l = [l_direct, l_early, late_rev_L]
+    parts_r = [r_direct, r_early, late_rev_R]
     n = max(len(p) for p in parts_l + parts_r)
 
     def pad(p):
