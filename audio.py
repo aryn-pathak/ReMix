@@ -50,9 +50,6 @@ def apply_falloff(dist, wave):
 
 absorption_dbm = {125.0: -0.0004, 250.0: -0.0013, 500.0: -0.0027, 1000.0: -0.0047, 1400.0: -0.0064, 2000.0: -0.0099, 2800.0: -0.0163, 4000.0: -0.0297, 5600.0: -0.0544, 8000.0: -0.1053, 11300.0: -0.1983, 16000.0: -0.3645}
 
-def k(freq, db):
-    return 10**(db/20) - (2*math.cos(2*math.pi*freq/SR))
-
 def q_from_bandwidth_octaves(bw_octaves, freq):
     w0 = 2 * math.pi * freq / SR
     return 1 / (2 * math.sinh(math.log(2) / 2 * bw_octaves * w0 / math.sin(w0)))
@@ -223,19 +220,29 @@ def early_reflections(wave):
     def M(k):
         return round((distance(image(k), L_COORDS) - SL) * SR / 343)
 
+    def direction(p):
+        # listener faces +x (length), +y (width) is to the left, +z is up
+        dx, dy, dz = (p[i] - L_COORDS[i] for i in range(3))
+        az = math.degrees(math.atan2(dy, dx)) % 360
+        el = math.degrees(math.atan2(dz, math.hypot(dx, dy)))
+        return az, el
+
+    wave = np.asarray(wave, dtype=float)
     taps = [(M(k), a(k)) for k in range(6)]
     max_delay = max(m for m, _ in taps)
 
-    b = np.zeros(max_delay + 1)
-    for m, ak in taps:
-        b[m] += ak  # += in case two images share a delay
+    left, right = 0, 0
+    for k, (m, ak) in enumerate(taps):
+        x = np.zeros(len(wave) + max_delay)
+        x[m:m + len(wave)] = ak * wave
+        l, r = apply_IR(*direction(image(k)), x)
+        left, right = left + l, right + r
 
-    x = np.concatenate([np.asarray(wave, dtype=float), np.zeros(max_delay)])
-    return signal.lfilter(b, [1], x)
+    return left, right
 
-def decorrelate(wave, iacc = 0.6,D = 0.010):
+def decorrelate(wave, iacc = 0.6, d = 0.010):
     g = math.sqrt((1-iacc)/(1+iacc))
-    d = int(round(D * SR))
+    d = int(round(d * SR))
     b_l = np.zeros(d + 1)
     b_l[0], b_l[d] = 1, g
     b_r = np.zeros(d + 1)
