@@ -113,7 +113,7 @@ def room_reverb(wave):
         M = t*SR
 
         y = []
-        for n in range(len(wave)):
+        for n in range(truncate_samples):
             y.append(wave[n] + g * y[n - M])
 
         comb_filters.append(y)
