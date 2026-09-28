@@ -233,17 +233,21 @@ def early_reflections(wave):
     def M(k):
         return round((distance(image(k), L_COORDS) - SL) * SR / 343)
 
-    taps = [(M(k), a(k)) for k in range(6)]
-    max_delay = max(m for m, _ in taps)
+    # each reflection arrives from its image source's direction (the bounce point
+    # lies on the listener -> image line), so it gets that direction's HRIR
+    taps = [(M(k), a(k), *getir(*direction(image(k)))) for k in range(6)]
+    max_delay = max(m for m, *_ in taps)
 
-    b = np.zeros(max_delay + 1)
-    for m, ak in taps:
-        b[m] += ak  # += in case two images share a delay
+    b_l = np.zeros(max_delay + N)
+    b_r = np.zeros(max_delay + N)
+    for m, ak, left_IR, right_IR in taps:
+        b_l[m:m + N] += ak * left_IR  # += in case two images share a delay
+        b_r[m:m + N] += ak * right_IR
 
-    x = np.concatenate([np.asarray(wave, dtype=float), np.zeros(max_delay)])
-    return signal.lfilter(b, [1], x)
+    x = np.asarray(wave, dtype=float)
+    return signal.fftconvolve(x, b_l), signal.fftconvolve(x, b_r)
 
-def decorrelate(wave, iacc = 0.6, d = 0.010):
+def decorrelate(wave, iacc = 0.4, d = 0.010):
     g = math.sqrt((1-iacc)/(1+iacc))
     d = int(round(d * SR))
     b_l = np.zeros(d + 1)
@@ -269,7 +273,7 @@ def process_audio(audio_file):
     direct = apply_falloff(dist, audio)            # distance-attenuated
 
     l_direct, r_direct = apply_IR(az, el, direct)
-    l_early, r_early = decorrelate(early_reflections(direct))
+    l_early, r_early = early_reflections(direct)
     late_rev_L, late_rev_R = decorrelate(apply_drr(audio, dist))
 
     parts_l = [l_direct, l_early, late_rev_L]
