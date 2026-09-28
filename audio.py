@@ -256,20 +256,24 @@ def decorrelate(wave, iacc = 0.6, d = 0.010):
     return l, r
 
 def process_audio(audio_file):
-    audio, sampling_rate = sf.read(audio_file, dtype = 'float32')
+    audio, sampling_rate = sf.read(audio_file, dtype='float32')
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
     if sampling_rate != SR:
         audio = librosa.resample(audio, orig_sr=sampling_rate, target_sr=SR, axis=0)
 
-    audio = apply_air_absorption(audio, distance(S_COORDS, L_COORDS))
-    l_direct, r_direct = apply_IR(direction(S_COORDS)[0], direction(S_COORDS)[1], audio)
+    dist = distance(S_COORDS, L_COORDS)
+    az, el = direction(S_COORDS)
 
-    late_rev_L, late_rev_R = decorrelate(apply_drr(audio, distance(S_COORDS, L_COORDS)))
-    l_early, r_early = decorrelate(early_reflections(audio))
+    audio = apply_air_absorption(audio, dist)      # unattenuated, air-absorbed
+    direct = apply_falloff(dist, audio)            # distance-attenuated
 
-    parts_l = [apply_falloff(distance(S_COORDS, L_COORDS), l_direct), l_early, late_rev_L]
-    parts_r = [apply_falloff(distance(S_COORDS, L_COORDS), r_direct), r_early, late_rev_R]
+    l_direct, r_direct = apply_IR(az, el, direct)
+    l_early, r_early = decorrelate(early_reflections(direct))
+    late_rev_L, late_rev_R = decorrelate(apply_drr(audio, dist))
+
+    parts_l = [l_direct, l_early, late_rev_L]
+    parts_r = [r_direct, r_early, late_rev_R]
     n = max(len(p) for p in parts_l + parts_r)
 
     def pad(p):
