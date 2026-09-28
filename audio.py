@@ -1,5 +1,7 @@
 import math
 import random
+
+import librosa
 import numpy as np
 import sofar as s
 import soundfile as sf
@@ -254,7 +256,11 @@ def decorrelate(wave, iacc = 0.6, d = 0.010):
     return l, r
 
 def process_audio(audio_file):
-    audio = sf.read(audio_file, dtype = 'float32', always_2d=True)[0]
+    audio, s = sf.read(audio_file, dtype = 'float32')
+    audio = audio.mean(axis = 1)
+    if s != SR:
+        audio = librosa.resample(audio, orig_sr=s, target_sr=SR, axis=0)
+
     audio = audio.mean(axis=1)
     audio = apply_falloff(distance(S_COORDS, L_COORDS), audio)
     audio = apply_air_absorption(audio, distance(S_COORDS, L_COORDS))
