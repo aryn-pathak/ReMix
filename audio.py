@@ -207,7 +207,7 @@ def apply_drr(wave, dist):
     a = 2 * (h * w + h * l) * A["walls"] + l * w * A["floor"] + l * w * A["ceiling"]
 
     falloff_gain = r_ref / max(dist, r_ref)
-    rev_gain = 4 * math.sqrt(math.pi / a) / falloff_gain
+    rev_gain = 4 * math.sqrt(math.pi / a)
     return room_reverb(wave) * rev_gain
 
 def early_reflections(wave):
