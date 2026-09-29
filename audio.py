@@ -6,6 +6,7 @@ import sofar as s
 import soundfile as sf
 import sounddevice as sd
 import scipy.signal as signal
+import scipy.linalg as linalg
 
 N = 256  # no of samples in a measurement
 r_ref = 1.0
@@ -13,19 +14,19 @@ SR=48000
 T = 256 / SR * 1000  # length of a measurement in ms (48kHz sampling rate)
 
 ROOM_DIMENSIONS = {
-    "height": 6,
-    "length": 20,   # x
-    "width":  16,   # y
-}  # meters
+    "height": 3.2,
+    "length": 9,    # x
+    "width":  7,    # y
+}  # meters, V ≈ 200 m³
 
 A = {
-    "ceiling": 0.60,   # acoustic tile
-    "floor":   0.40,   # thick carpet
-    "walls":   0.35,   # heavy curtains, bookshelves, upholstered furniture
+    "ceiling": 0.40,   # tile, averaged over the whole spectrum (mid/high ~0.6, lows much lower)
+    "floor":   0.30,   # carpet, or wood plus rugs
+    "walls":   0.25,   # drywall mixed with curtains, shelves, sofa
 }
 
-L_COORDS = (7.0, 8.0, 1.7)
-S_COORDS = (11.243, 12.243, 1.7)   # 6.0 m at 45 deg, 0 deg elevation
+L_COORDS = (2.0, 1.5, 1.7)
+S_COORDS = (6.243, 5.743, 1.7)   # 6.0 m at 45 deg, 0 deg elevation
 
 sofa = s.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
@@ -179,27 +180,67 @@ def room_reverb(wave, max_delay):
     max_dist = math.sqrt(h**2 + w**2 + l**2) / 2
     min_dist = min(h, w, l) / 2
     rng = random.Random(0)
+    n_lines = 32  # power of 2 for the Hadamard matrices
     delays = set()
-    while len(delays) < 6:
+    while len(delays) < n_lines:
         d = rng.uniform(min_dist, max_dist)
         delays.add(next_prime(round(2 * d / 343 * SR)))
+    Ms = np.array(sorted(delays))
 
-    ir = np.zeros(truncate_samples)
-    for M in sorted(delays):
-        g = 10 ** (-3 * (M / SR) / rts)
-        k = np.arange(1, (truncate_samples - 1) // M + 1)
-        ir[k * M] += g ** (k - 1)
+    # lossless mixing (orthogonal Hadamard) + per-line gain so every line decays 60 dB in rts
+    Q = linalg.hadamard(n_lines) / math.sqrt(n_lines)
+    g = 10 ** (-3 * (Ms / SR) / rts)
 
-    for t in (0.005, 0.0017):
-        ir = allpass(ir, next_prime(round(t * SR)))
+    def signs():
+        return np.array([rng.choice((-1.0, 1.0)) for _ in range(n_lines)])
 
-    ir /= math.sqrt(np.sum(ir ** 2))
+    # multichannel diffuser in front of the FDN: each stage delays every channel by a different
+    # amount, flips random polarities and Hadamard-mixes, so one impulse becomes a dense burst
+    diffused = signs()[:, None]
+    for stage_ms in (1.25, 2.5, 5, 10):
+        span = stage_ms / 1000 * SR
+        offsets = [int(span * (i + rng.random()) / n_lines) for i in range(n_lines)]
+        shifted = np.zeros((n_lines, diffused.shape[1] + max(offsets)))
+        for i, o in enumerate(offsets):
+            shifted[i, o:o + diffused.shape[1]] = diffused[i]
+        diffused = Q @ (signs()[:, None] * shifted)
+
+    # impulse response of each delay line's output, computed a block at a time: within a block
+    # no longer than the shortest delay, every delay-line read comes from an already-finished write
+    lines = np.zeros((n_lines, truncate_samples))  # what enters each delay line
+    lines[:, :diffused.shape[1]] = diffused[:, :truncate_samples]
+    outs = np.zeros((n_lines, truncate_samples))
+    row = np.arange(n_lines)[:, None]
+    for start in range(0, truncate_samples, Ms[0]):
+        t = np.arange(start, min(start + Ms[0], truncate_samples))
+        idx = t[None, :] - Ms[:, None]
+        outs[:, t] = np.where(idx >= 0, lines[row, np.maximum(idx, 0)], 0) * g[:, None]
+        lines[:, t] += Q @ outs[:, t]
+
+    # the line outputs are mutually uncorrelated, so giving each one its own direction (spread
+    # evenly over the sphere) and its HRIR builds a diffuse field at the ears: coherent in the
+    # bass, incoherent higher up, exactly as the head shapes it in a real room
+    ir_l = np.zeros(truncate_samples + N - 1)
+    ir_r = np.zeros(truncate_samples + N - 1)
+    for i in range(n_lines):
+        z = 1 - 2 * (i + 0.5) / n_lines  # Fibonacci sphere
+        az = math.degrees(i * math.pi * (3 - math.sqrt(5))) % 360
+        el = math.degrees(math.asin(z))
+        left_IR, right_IR = getir(az, el)
+        ir_l += signal.fftconvolve(outs[i], left_IR)
+        ir_r += signal.fftconvolve(outs[i], right_IR)
+
+    norm = math.sqrt((np.sum(ir_l ** 2) + np.sum(ir_r ** 2)) / 2)
     fade = round(0.020 * SR)
-    end = min(max_delay, len(ir))
+    end = min(max_delay, len(ir_l))
     start = max(end - fade, 0)
-    ir[:start] = 0
-    ir[start:end] *= np.sin(np.pi / 2 * np.arange(fade - (end - start), fade) / fade)
-    return signal.fftconvolve(np.asarray(wave, dtype=float), ir)
+    x = np.asarray(wave, dtype=float)
+    out = []
+    for ir in (ir_l / norm, ir_r / norm):
+        ir[:start] = 0
+        ir[start:end] *= np.sin(np.pi / 2 * np.arange(fade - (end - start), fade) / fade)
+        out.append(signal.fftconvolve(x, ir))
+    return out[0], out[1]
 
 def apply_drr(wave, dist, max_delay):
     h = ROOM_DIMENSIONS["height"]
@@ -210,7 +251,8 @@ def apply_drr(wave, dist, max_delay):
 
     falloff_gain = r_ref / max(dist, r_ref)
     rev_gain = 4 * math.sqrt(math.pi / a)
-    return room_reverb(wave, max_delay) * rev_gain
+    left, right = room_reverb(wave, max_delay)
+    return left * rev_gain, right * rev_gain
 
 def early_reflections(wave):
     size = (ROOM_DIMENSIONS["length"], ROOM_DIMENSIONS["width"], ROOM_DIMENSIONS["height"])
@@ -276,10 +318,10 @@ def process_audio(audio_file):
 
     l_direct, r_direct = apply_IR(az, el, direct)
     l_early, r_early, max_delay = early_reflections(direct)
-    late_rev_L, late_rev_R = decorrelate(apply_drr(audio, dist, max_delay))
+    late_rev_L, late_rev_R = apply_drr(audio, dist, max_delay)
 
-    parts_l = [late_rev_L] # parts_l = [l_direct, l_early, late_rev_L]
-    parts_r = [late_rev_R] # parts_r = [r_direct, r_early, late_rev_R]
+    parts_l = [l_direct, l_early, late_rev_L]
+    parts_r = [r_direct, r_early, late_rev_R]
     n = max(len(p) for p in parts_l + parts_r)
 
     def pad(p):
