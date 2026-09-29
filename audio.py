@@ -14,19 +14,19 @@ SR=48000
 T = 256 / SR * 1000  # length of a measurement in ms (48kHz sampling rate)
 
 ROOM_DIMENSIONS = {
-    "height" : 8,
-    "length" : 12,
-    "width" : 10
-} # meters
+    "height": 6,
+    "length": 20,   # x
+    "width":  16,   # y
+}  # meters
 
 A = {
-    "ceiling" : 0.80,
-    "floor" : 0.15,
-    "walls" : 0.03
-} # sound absorption constant
+    "ceiling": 0.60,   # acoustic tile
+    "floor":   0.40,   # thick carpet
+    "walls":   0.35,   # heavy curtains, bookshelves, upholstered furniture
+}
 
-L_COORDS = (4.0, 5.0, 1.7)
-S_COORDS = (6.0, 8.0, 1.7)
+L_COORDS = (7.0, 8.0, 1.7)
+S_COORDS = (11.243, 12.243, 1.7)   # 6.0 m at 45 deg, 0 deg elevation
 
 sofa = s.read_sofa("SADIEII_KU100.sofa")
 sources = sofa.SourcePosition[:, :2]
@@ -159,7 +159,7 @@ def allpass(x, M, g=0.7):
     a[0], a[M] = 1, -g
     return signal.lfilter(b, a, x)
 
-def room_reverb(wave):
+def room_reverb(wave, max_delay):
     def is_prime(k):
         return k > 1 and all(k % p for p in range(2, int(k ** 0.5) + 1))
 
@@ -197,9 +197,17 @@ def room_reverb(wave):
         ir = allpass(ir, next_prime(round(t * SR)))
 
     ir /= math.sqrt(np.sum(ir ** 2))   # unit energy, keeps apply_drr calibrated
+
+    # early_reflections covers everything up to max_delay: silence the tail
+    # there, with a 20ms sine fade-in ending at max_delay
+    fade = round(0.020 * SR)
+    end = min(max_delay, len(ir))
+    start = max(end - fade, 0)
+    ir[:start] = 0
+    ir[start:end] *= np.sin(np.pi / 2 * np.arange(fade - (end - start), fade) / fade)
     return signal.fftconvolve(np.asarray(wave, dtype=float), ir)
 
-def apply_drr(wave, dist):
+def apply_drr(wave, dist, max_delay):
     h = ROOM_DIMENSIONS["height"]
     w = ROOM_DIMENSIONS["width"]
     l = ROOM_DIMENSIONS["length"]
@@ -208,7 +216,7 @@ def apply_drr(wave, dist):
 
     falloff_gain = r_ref / max(dist, r_ref)
     rev_gain = 4 * math.sqrt(math.pi / a)
-    return room_reverb(wave) * rev_gain
+    return room_reverb(wave, max_delay) * rev_gain
 
 def early_reflections(wave):
     size = (ROOM_DIMENSIONS["length"], ROOM_DIMENSIONS["width"], ROOM_DIMENSIONS["height"])
@@ -245,7 +253,7 @@ def early_reflections(wave):
         b_r[m:m + N] += ak * right_IR
 
     x = np.asarray(wave, dtype=float)
-    return signal.fftconvolve(x, b_l), signal.fftconvolve(x, b_r)
+    return signal.fftconvolve(x, b_l), signal.fftconvolve(x, b_r), max_delay
 
 def decorrelate(wave, iacc = 0.4, d = 0.010):
     g = math.sqrt((1-iacc)/(1+iacc))
@@ -273,11 +281,11 @@ def process_audio(audio_file):
     direct = apply_falloff(dist, audio)            # distance-attenuated
 
     l_direct, r_direct = apply_IR(az, el, direct)
-    l_early, r_early = early_reflections(direct)
-    late_rev_L, late_rev_R = decorrelate(apply_drr(audio, dist))
+    l_early, r_early, max_delay = early_reflections(direct)
+    late_rev_L, late_rev_R = decorrelate(apply_drr(audio, dist, max_delay))
 
-    parts_l = [l_direct, l_early, late_rev_L]
-    parts_r = [r_direct, r_early, late_rev_R]
+    parts_l = [late_rev_L] # parts_l = [l_direct, l_early, late_rev_L]
+    parts_r = [late_rev_R] # parts_r = [r_direct, r_early, late_rev_R]
     n = max(len(p) for p in parts_l + parts_r)
 
     def pad(p):
