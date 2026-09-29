@@ -1,5 +1,4 @@
 import math
-import random
 
 import librosa
 import numpy as np
@@ -7,6 +6,7 @@ import sofar as s
 import soundfile as sf
 import sounddevice as sd
 import scipy.signal as signal
+from scipy.linalg import hadamard
 
 N = 256  # no of samples in a measurement
 r_ref = 1.0
@@ -151,15 +151,9 @@ def apply_air_absorption(wave, dist): # meters
     bands = {k: v * dist for k, v in absorption_dbm.items()}
     return apply_eq(bands, wave)
 
-def allpass(x, M, g=0.7):
-    # Schroeder allpass: y[n] = -g*x[n] + x[n-M] + g*y[n-M]
-    b = np.zeros(M + 1)
-    b[0], b[M] = -g, 1
-    a = np.zeros(M + 1)
-    a[0], a[M] = 1, -g
-    return signal.lfilter(b, a, x)
-
-def room_reverb(wave, max_delay):
+def room_reverb(wave, max_delay, lines=16):
+    # feedback delay network: `lines` delay lines, each fed back into all the
+    # others through a lossless mixing matrix. lines must be a power of 2 (Hadamard)
     def is_prime(k):
         return k > 1 and all(k % p for p in range(2, int(k ** 0.5) + 1))
 
@@ -179,27 +173,33 @@ def room_reverb(wave, max_delay):
 
     max_dist = math.sqrt(h**2 + w**2 + l**2) / 2
     min_dist = min(h, w, l) / 2
-    rng = random.Random(0)
-    delays = set()
-    while len(delays) < 6:
-        d = rng.uniform(min_dist, max_dist)
-        delays.add(next_prime(round(2 * d / 343 * SR)))
+    M = []
+    for d in np.geomspace(min_dist, max_dist, lines):
+        M.append(next_prime(max(round(2 * d / 343 * SR), M[-1] + 1 if M else 0)))
+    M = np.array(M)
 
-    # parallel combs: sparse, decaying spikes
+    mix = hadamard(lines) / math.sqrt(lines)
+    g = 10 ** (-3 * (M / SR) / rts)
+    rng = np.random.default_rng(0)
+    b = rng.choice([-1.0, 1.0], lines)
+    c = rng.choice([-1.0, 1.0], lines)
+
+    x = np.zeros((lines, truncate_samples))
+    x[:, 0] = b
     ir = np.zeros(truncate_samples)
-    for M in sorted(delays):
-        g = 10 ** (-3 * (M / SR) / rts)
-        k = np.arange(1, (truncate_samples - 1) // M + 1)
-        ir[k * M] += g ** (k - 1)
+    block = int(M.min())
+    for n0 in range(0, truncate_samples, block):
+        n1 = min(n0 + block, truncate_samples)
+        out = np.zeros((lines, n1 - n0))
+        for i, m in enumerate(M):
+            lo, hi = n0 - m, n1 - m
+            if hi > 0:
+                out[i, max(-lo, 0):] = x[i, max(lo, 0):hi]
+        ir[n0:n1] = c @ out
+        x[:, n0:n1] += mix @ (g[:, None] * out)
 
-    # series allpasses: smear each spike into a dense cluster
-    for t in (0.005, 0.0017):
-        ir = allpass(ir, next_prime(round(t * SR)))
+    ir /= math.sqrt(np.sum(ir ** 2))
 
-    ir /= math.sqrt(np.sum(ir ** 2))   # unit energy, keeps apply_drr calibrated
-
-    # early_reflections covers everything up to max_delay: silence the tail
-    # there, with a 20ms sine fade-in ending at max_delay
     fade = round(0.020 * SR)
     end = min(max_delay, len(ir))
     start = max(end - fade, 0)
