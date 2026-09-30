@@ -107,12 +107,5 @@ def main():
     sf.write(out_path, mix, SR)
     print(f"Saved {out_path}")
 
-    # --- playback: delete from here to the end of main() to only save ---
-    import sounddevice as sd
-    print("Playing...")
-    sd.play(mix, SR)
-    sd.wait()
-
-
 if __name__ == '__main__':
     main()
