@@ -47,9 +47,9 @@ def apply_IR(az, el, wave):
     right = signal.fftconvolve(wave, right_IR)
     return left, right
 
-def direction(p):
+def direction(p, listener=L_COORDS):
     # listener faces +x (length), +y (width) is to the left, +z is up
-    dx, dy, dz = (p[i] - L_COORDS[i] for i in range(3))
+    dx, dy, dz = (p[i] - listener[i] for i in range(3))
     az = math.degrees(math.atan2(dy, dx)) % 360
     el = math.degrees(math.atan2(dz, math.hypot(dx, dy)))
     return az, el
@@ -159,10 +159,10 @@ def allpass(x, M, g=0.7):
     a[0], a[M] = 1, -g
     return signal.lfilter(b, a, x)
 
-def apply_drr(wave, dist, max_delay):
-    h = ROOM_DIMENSIONS["height"]
-    w = ROOM_DIMENSIONS["width"]
-    l = ROOM_DIMENSIONS["length"]
+def apply_drr(wave, dist, max_delay, room=ROOM_DIMENSIONS):
+    h = room["height"]
+    w = room["width"]
+    l = room["length"]
 
     a = 2 * (h * w + h * l) * A["walls"] + l * w * A["floor"] + l * w * A["ceiling"]
 
@@ -249,17 +249,17 @@ def apply_drr(wave, dist, max_delay):
     left, right = room_reverb(wave, max_delay)
     return left * rev_gain, right * rev_gain
 
-def early_reflections(wave):
-    size = (ROOM_DIMENSIONS["length"], ROOM_DIMENSIONS["width"], ROOM_DIMENSIONS["height"])
+def early_reflections(wave, room=ROOM_DIMENSIONS, source=S_COORDS, listener=L_COORDS):
+    size = (room["length"], room["width"], room["height"])
 
     def image(k):
         axis = k // 2
         wall = 0.0 if k % 2 == 0 else size[axis]
-        p = list(S_COORDS)
+        p = list(source)
         p[axis] = 2 * wall - p[axis]
         return tuple(p)
 
-    SL = distance(S_COORDS, L_COORDS)
+    SL = distance(source, listener)
 
     def alpha(k):
         if k < 4:
@@ -267,14 +267,14 @@ def early_reflections(wave):
         return A["floor"] if k == 4 else A["ceiling"]
 
     def a(k):
-        return math.sqrt(1 - alpha(k)) * max(SL, r_ref) / distance(image(k), L_COORDS)
+        return math.sqrt(1 - alpha(k)) * max(SL, r_ref) / distance(image(k), listener)
 
     def M(k):
-        return round((distance(image(k), L_COORDS) - SL) * SR / 343)
+        return round((distance(image(k), listener) - SL) * SR / 343)
 
     # each reflection arrives from its image source's direction (the bounce point
     # lies on the listener -> image line), so it gets that direction's HRIR
-    taps = [(M(k), a(k), *getir(*direction(image(k)))) for k in range(6)]
+    taps = [(M(k), a(k), *getir(*direction(image(k), listener))) for k in range(6)]
     max_delay = max(m for m, *_ in taps)
 
     b_l = np.zeros(max_delay + N)
@@ -298,22 +298,25 @@ def decorrelate(wave, iacc = 0.4, d = 0.010):
     r = signal.lfilter(b_r, [1], x)
     return l, r
 
-def process_audio(audio_file):
-    audio, sampling_rate = sf.read(audio_file, dtype='float32')
+def process_audio(audio, sampling_rate=SR, room_dimensions=ROOM_DIMENSIONS,
+                  listener_coords=L_COORDS, source_coords=S_COORDS, normalize=True):
+    # audio is a file path, or a samples array at sampling_rate
+    if isinstance(audio, str):
+        audio, sampling_rate = sf.read(audio, dtype='float32')
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
     if sampling_rate != SR:
         audio = librosa.resample(audio, orig_sr=sampling_rate, target_sr=SR, axis=0)
 
-    dist = distance(S_COORDS, L_COORDS)
-    az, el = direction(S_COORDS)
+    dist = distance(source_coords, listener_coords)
+    az, el = direction(source_coords, listener_coords)
 
     audio = apply_air_absorption(audio, dist)      # unattenuated, air-absorbed
     direct = apply_falloff(dist, audio)            # distance-attenuated
 
     l_direct, r_direct = apply_IR(az, el, direct)
-    l_early, r_early, max_delay = early_reflections(direct)
-    late_rev_L, late_rev_R = apply_drr(audio, dist, max_delay)
+    l_early, r_early, max_delay = early_reflections(direct, room_dimensions, source_coords, listener_coords)
+    late_rev_L, late_rev_R = apply_drr(audio, dist, max_delay, room_dimensions)
 
     parts_l = [l_direct, l_early, late_rev_L]
     parts_r = [r_direct, r_early, late_rev_R]
@@ -326,7 +329,7 @@ def process_audio(audio_file):
     right = np.sum([pad(p) for p in parts_r], axis=0)
 
     peak = max(np.max(np.abs(left)), np.max(np.abs(right)))
-    if peak > 1:
+    if normalize and peak > 1:
         left, right = left / peak, right / peak
 
     return np.column_stack([left, right])
