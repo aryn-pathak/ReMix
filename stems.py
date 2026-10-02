@@ -86,7 +86,12 @@ def separate(path):
 def main():
     path = ask_path()
     room = ask_room()
-    if curses.wrapper(tui.choose, "Positioning:", ["simple", "advanced"]) == "advanced":
+    try:
+        mode = curses.wrapper(tui.choose, "Positioning:", ["simple", "advanced"])
+    except curses.error:  # not a real terminal, e.g. an IDE's run console
+        print("No interactive terminal, using simple positioning")
+        mode = "simple"
+    if mode == "advanced":
         positions = curses.wrapper(tui.place, room, STEM_ORDER, AZIMUTHS)
         curses.wrapper(tui.elevate, room, positions)
     else:
