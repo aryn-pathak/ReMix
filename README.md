@@ -1,6 +1,7 @@
 # ReMix (1.0)
 
 > An audio spatializer that separates a song into stems and places each one at a distinct 3D position around the listener, creating a wider, more immersive headphone experience.
+> Output demos of tested songs [here](https://youtu.be/GdZYN0wQXBQ)
 
 ## Requirements
 
@@ -42,6 +43,8 @@ python stems.py
 ```
 
 The first run downloads the Demucs `htdemucs_6s` model weights. The output is written next to the input song as `<song>_spatial.wav`.
+
+> Note: The material of the room is dictated by it's absorption coefficient alpha, "A" in `audio.py`. Look up absorption for your desired materials and edit the values. Real rooms have furniture which absorb much more, so uncompensated coefficients may feel echoey.
 
 ## Files
 
