@@ -333,8 +333,3 @@ def process_audio(audio, sampling_rate=SR, room_dimensions=ROOM_DIMENSIONS,
         left, right = left / peak, right / peak
 
     return np.column_stack([left, right])
-
-if __name__ == '__main__':
-    audio_file = "test1.mp3"
-    sd.play(process_audio(audio_file), SR)
-    sd.wait()
