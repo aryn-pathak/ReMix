@@ -34,7 +34,7 @@ def ask_path():
 
 def ask_room():
     try:
-        x, y, z = (float(v) for v in input("Room length width height in m, e.g. 9 7 3.2: ").split())
+        x, y, z = (float(v) for v in input("Room length width height in m, e.g. 9 7 3.2 (defaults to this): ").split())
         # sources sit at least 1 m out, so the room has to be 2 m across
         if min(x, y) >= 2 and z >= 1:
             return {"length": x, "width": y, "height": z}
