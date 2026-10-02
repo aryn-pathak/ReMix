@@ -74,7 +74,7 @@ A more detailed explanation is in the [devlog](https://stardance.hackclub.com/pr
 
 ## License
 
-<!-- Add your license here, e.g. MIT, and make sure a LICENSE file is in the repo -->
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgements
 
