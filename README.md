@@ -5,7 +5,7 @@
 
 ## Download
 
-Prebuilt apps are on the [Releases page](https://github.com/aryn-pathak/Binaural/releases/latest), no Python or setup needed (the HRIR dataset is bundled). Download the one for your system, extract it, and run it from a terminal. The first run needs internet to download the Demucs model weights.
+Prebuilt apps are on the [Releases page](https://github.com/aryn-pathak/ReMix/releases/latest), no Python or setup needed (the HRIR dataset is bundled). Download the one for your system, extract it, and run it from a terminal. The first run needs internet to download the Demucs model weights.
 
 - **macOS (Apple Silicon)**: `ReMix-macos-arm64.zip`. The app isn't signed, so macOS blocks it at first. Run `xattr -dr com.apple.quarantine ReMix` on the extracted folder, then `./ReMix/ReMix`.
 - **Windows (64-bit)**: `ReMix-windows-x64.zip`. Run `ReMix\ReMix.exe` from Command Prompt or PowerShell. SmartScreen may warn about an unrecognised app; choose "More info" then "Run anyway".
