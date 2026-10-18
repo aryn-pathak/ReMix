@@ -1,0 +1,89 @@
+name: Build
+
+# pushing a tag like v1.0 builds every platform and publishes a release;
+# running it by hand from the Actions tab just builds, for testing
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest   # apple silicon
+            name: macos-arm64
+          - os: windows-latest
+            name: windows-x64
+          - os: ubuntu-22.04   # older glibc, so the build runs on more distros
+            name: linux-x64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # pypi's linux torch is the cuda build, several GB larger
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            pip install torch --index-url https://download.pytorch.org/whl/cpu
+          fi
+          pip install -r requirements.txt pyinstaller
+
+      - name: Download SADIE II HRIRs
+        run: |
+          curl -sL -o d1.zip "https://zenodo.org/records/12092466/files/D1_HRIR_SOFA.zip?download=1"
+          unzip -q -j d1.zip D1_HRIR_SOFA/D1_48K_24bit_256tap_FIR_SOFA.sofa
+          mv D1_48K_24bit_256tap_FIR_SOFA.sofa SADIEII_KU100.sofa
+          echo "9af7cb19531e52fb7ae8ec92621e6ab62b1d5fe584b3742be36699a0ddb0ccd4  SADIEII_KU100.sofa" | shasum -a 256 -c
+
+      - name: Build
+        run: pyinstaller --noconfirm ReMix.spec
+
+      - name: Smoke test on a short clip
+        timeout-minutes: 20
+        run: |
+          python -c "import numpy as np, soundfile as sf; sf.write('clip.wav', np.random.default_rng(0).uniform(-0.3, 0.3, (44100 * 3, 2)), 44100)"
+          printf "clip.wav\n9 7 3.2\n2\n" | ./dist/ReMix/ReMix
+          test -f clip_spatial.wav
+
+      - name: Package
+        run: |
+          cd dist
+          case "$RUNNER_OS" in
+            macOS)   ditto -c -k --keepParent ReMix ../ReMix-${{ matrix.name }}.zip ;;
+            Windows) 7z a -tzip ../ReMix-${{ matrix.name }}.zip ReMix > /dev/null ;;
+            Linux)   tar -czf ../ReMix-${{ matrix.name }}.tar.gz ReMix ;;
+          esac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReMix-${{ matrix.name }}
+          path: ReMix-${{ matrix.name }}.*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" ReMix-* --repo "$GITHUB_REPOSITORY" --title "ReMix $GITHUB_REF_NAME" --generate-notes
