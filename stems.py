@@ -1,5 +1,6 @@
 import curses
 import math
+import multiprocessing
 import os
 
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # run any op mps lacks on the cpu
@@ -121,4 +122,7 @@ def main():
     print(f"Saved {out_path}")
 
 if __name__ == '__main__':
+    # in a pyinstaller build, helper processes relaunch this executable; this makes them
+    # do their job and exit instead of running main() again
+    multiprocessing.freeze_support()
     main()

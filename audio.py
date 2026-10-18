@@ -1,10 +1,11 @@
 import math
+import os
 import random
+import sys
 import librosa
 import numpy as np
 import sofar as s
 import soundfile as sf
-import sounddevice as sd
 import scipy.signal as signal
 import scipy.linalg as linalg
 
@@ -28,7 +29,9 @@ A = {
 L_COORDS = (2.0, 1.5, 1.7)
 S_COORDS = (6.243, 5.743, 1.7)   # 6.0 m at 45 deg, 0 deg elevation
 
-sofa = s.read_sofa("SADIEII_KU100.sofa")
+# a pyinstaller build unpacks bundled data to sys._MEIPASS, otherwise look next to this file
+BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+sofa = s.read_sofa(os.path.join(BASE_DIR, "SADIEII_KU100.sofa"))
 sources = sofa.SourcePosition[:, :2]
 
 hrirs = np.asarray(sofa.Data_IR, dtype=float)
