@@ -2,7 +2,6 @@ import math
 import os
 import random
 import sys
-import librosa
 import numpy as np
 import sofar as s
 import soundfile as sf
@@ -301,6 +300,13 @@ def decorrelate(wave, iacc = 0.4, d = 0.010):
     r = signal.lfilter(b_r, [1], x)
     return l, r
 
+def resample(x, orig_sr, target_sr):
+    # polyphase resampling along axis 0, e.g. 44.1 to 48 kHz is up 160, down 147
+    if orig_sr == target_sr:
+        return x
+    g = math.gcd(int(orig_sr), int(target_sr))
+    return signal.resample_poly(x, int(target_sr) // g, int(orig_sr) // g, axis=0)
+
 def process_audio(audio, sampling_rate=SR, room_dimensions=ROOM_DIMENSIONS,
                   listener_coords=L_COORDS, source_coords=S_COORDS, normalize=True):
     # audio is a file path, or a samples array at sampling_rate
@@ -309,7 +315,7 @@ def process_audio(audio, sampling_rate=SR, room_dimensions=ROOM_DIMENSIONS,
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
     if sampling_rate != SR:
-        audio = librosa.resample(audio, orig_sr=sampling_rate, target_sr=SR, axis=0)
+        audio = resample(audio, sampling_rate, SR)
 
     dist = distance(source_coords, listener_coords)
     az, el = direction(source_coords, listener_coords)

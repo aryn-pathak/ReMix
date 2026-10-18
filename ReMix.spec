@@ -6,7 +6,6 @@ datas = [('SADIEII_KU100.sofa', '.')]
 binaries = []
 hiddenimports = []
 datas += collect_data_files('sofar')
-datas += collect_data_files('librosa')
 tmp_ret = collect_all('demucs')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
@@ -20,7 +19,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'tkinter'],
+    excludes=['matplotlib', 'tkinter', 'librosa', 'numba', 'llvmlite', 'sklearn'],
     noarchive=False,
     optimize=0,
 )

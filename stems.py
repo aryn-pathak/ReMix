@@ -5,7 +5,6 @@ import os
 
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # run any op mps lacks on the cpu
 
-import librosa
 import numpy as np
 import soundfile as sf
 import torch
@@ -13,7 +12,7 @@ from demucs.apply import apply_model
 from demucs.pretrained import get_model
 
 import tui
-from audio import SR, ROOM_DIMENSIONS, process_audio
+from audio import SR, ROOM_DIMENSIONS, process_audio, resample
 
 DEFAULT_DISTANCE = 2.0  # meters
 
@@ -67,10 +66,11 @@ def separate(path):
     model = get_model("htdemucs_6s")
     model.eval()
 
-    wave, _ = librosa.load(path, sr=model.samplerate, mono=False)
-    if wave.ndim == 1:
-        wave = np.stack([wave, wave])
-    mix = torch.from_numpy(wave)
+    wave, sr = sf.read(path, dtype="float32", always_2d=True)  # (samples, channels)
+    wave = resample(wave, sr, model.samplerate).astype(np.float32)
+    if wave.shape[1] == 1:
+        wave = np.repeat(wave, 2, axis=1)
+    mix = torch.from_numpy(np.ascontiguousarray(wave.T))  # demucs wants (channels, samples)
 
     # demucs expects a standardised input, as its own cli does
     ref = mix.mean(0)
