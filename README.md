@@ -3,6 +3,16 @@
 > An audio spatializer that separates a song into stems and places each one at a distinct 3D position around the listener, creating a wider, more immersive headphone experience.
 > Output demos of tested songs [here](https://youtu.be/GdZYN0wQXBQ)
 
+## Download (macOS, Apple Silicon)
+
+A prebuilt app is on the [Releases page](https://github.com/aryn-pathak/Binaural/releases/latest), no Python or setup needed (the HRIR dataset is bundled).
+
+1. Download and unzip `ReMix-macos-arm64.zip`.
+2. The app isn't signed, so macOS will block it at first. In a terminal, run `xattr -dr com.apple.quarantine ReMix` on the unzipped folder.
+3. Run `./ReMix/ReMix` from a terminal. The first run needs internet to download the Demucs model weights.
+
+To build it yourself, follow Setup below, then `pip install pyinstaller` and `pyinstaller --noconfirm ReMix.spec`. The app is written to `dist/ReMix/`.
+
 ## Requirements
 
 - Python 3.12+ (tested, might work on older versions)
@@ -78,7 +88,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Acknowledgements
 
-- **SADIE II**: SADIE Database Copyright 2018 The University of York.
+- **SADIE II**: SADIE Database Copyright 2018 The University of York, licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). The D1 (KU100) HRIR file is bundled in the prebuilt app.
   This product includes data developed at The Audio Lab, University of York, UK
   (Cal Armstrong, Lewis Thresh, Gavin Kearney) as part of the SADIE Project.
   [Database link](https://www.york.ac.uk/sadie-project/database.html)

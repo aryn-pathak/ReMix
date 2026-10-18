@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+
+# Editor / OS
+.idea/
+.DS_Store
+
+# Audio (inputs and rendered output)
+*.mp3
+*.wav
+
+# HRTF dataset — download separately, see README
+*.sofa
+revolve.py
+
+# PyInstaller output
+build/
+dist/
