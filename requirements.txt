@@ -5,6 +5,7 @@ scipy>=1.18.1
 sofar>=1.3.0
 soundfile>=0.14.0
 torch>=2.14.0
+windows-curses>=2.4; sys_platform == "win32"  # curses isn't built into python on windows
 
 # only needed for the reference scripts (visualisation.py, analysis.py)
 matplotlib>=3.11.1
