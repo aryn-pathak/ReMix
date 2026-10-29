@@ -3,15 +3,6 @@
 > An audio spatializer that separates a song into stems and places each one at a distinct 3D position around the listener, creating a wider, more immersive headphone experience.
 > Output demos of tested songs [here](https://youtu.be/GdZYN0wQXBQ)
 
-## Download
-
-Prebuilt apps are on the [Releases page](https://github.com/aryn-pathak/ReMix/releases/latest), no Python or setup needed (the HRIR dataset is bundled). Builds are available for macOS (Apple Silicon) and Linux; on other systems, follow Setup below. Download the one for your system, extract it, and run it from a terminal. The first run needs internet to download the Demucs model weights.
-
-- **macOS (Apple Silicon)**: `ReMix-macos-arm64.zip`. The app isn't signed, so macOS blocks it at first. Run `xattr -dr com.apple.quarantine ReMix` on the extracted folder, then `./ReMix/ReMix`.
-- **Linux (x64)**: `ReMix-linux-x64.tar.gz`. Run `./ReMix/ReMix`.
-
-To build it yourself, follow Setup below, then `pip install pyinstaller` and `pyinstaller --noconfirm ReMix.spec`. The app is written to `dist/ReMix/`.
-
 ## Requirements
 
 - Python 3.12+ (tested, might work on older versions)
