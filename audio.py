@@ -13,18 +13,6 @@ r_ref = 1.0
 SR=48000
 T = 256 / SR * 1000  # length of a measurement in ms (48kHz sampling rate)
 
-ROOM_DIMENSIONS = {
-    "height": 3.2,
-    "length": 9,    # x
-    "width":  7,    # y
-}  # meters, V ≈ 200 m³
-
-A = {
-    "ceiling": 0.40,   # tile, averaged over the whole spectrum (mid/high ~0.6, lows much lower)
-    "floor":   0.30,   # carpet, or wood plus rugs
-    "walls":   0.25,   # drywall mixed with curtains, shelves, sofa
-}
-
 L_COORDS = (2.0, 1.5, 1.7)
 S_COORDS = (6.243, 5.743, 1.7)   # 6.0 m at 45 deg, 0 deg elevation
 
@@ -161,7 +149,7 @@ def allpass(x, M, g=0.7):
     a[0], a[M] = 1, -g
     return signal.lfilter(b, a, x)
 
-def apply_drr(wave, dist, max_delay, room=ROOM_DIMENSIONS):
+def apply_drr(wave, dist, max_delay, room, A):
     h = room["height"]
     w = room["width"]
     l = room["length"]
@@ -251,7 +239,7 @@ def apply_drr(wave, dist, max_delay, room=ROOM_DIMENSIONS):
     left, right = room_reverb(wave, max_delay)
     return left * rev_gain, right * rev_gain
 
-def early_reflections(wave, room=ROOM_DIMENSIONS, source=S_COORDS, listener=L_COORDS):
+def early_reflections(A, wave, room, source=S_COORDS, listener=L_COORDS):
     size = (room["length"], room["width"], room["height"])
 
     def image(k):
@@ -307,8 +295,7 @@ def resample(x, orig_sr, target_sr):
     g = math.gcd(int(orig_sr), int(target_sr))
     return signal.resample_poly(x, int(target_sr) // g, int(orig_sr) // g, axis=0)
 
-def process_audio(audio, sampling_rate=SR, room_dimensions=ROOM_DIMENSIONS,
-                  listener_coords=L_COORDS, source_coords=S_COORDS, normalize=True):
+def process_audio(A, room_dimensions, audio, sampling_rate=SR, listener_coords=L_COORDS, source_coords=S_COORDS, normalize=True):
     # audio is a file path, or a samples array at sampling_rate
     if isinstance(audio, str):
         audio, sampling_rate = sf.read(audio, dtype='float32')
@@ -324,8 +311,8 @@ def process_audio(audio, sampling_rate=SR, room_dimensions=ROOM_DIMENSIONS,
     direct = apply_falloff(dist, audio)            # distance-attenuated
 
     l_direct, r_direct = apply_IR(az, el, direct)
-    l_early, r_early, max_delay = early_reflections(direct, room_dimensions, source_coords, listener_coords)
-    late_rev_L, late_rev_R = apply_drr(audio, dist, max_delay, room_dimensions)
+    l_early, r_early, max_delay = early_reflections(A, direct, room_dimensions, source_coords, listener_coords)
+    late_rev_L, late_rev_R = apply_drr(audio, dist, max_delay, room_dimensions, A)
 
     parts_l = [l_direct, l_early, late_rev_L]
     parts_r = [r_direct, r_early, late_rev_R]
