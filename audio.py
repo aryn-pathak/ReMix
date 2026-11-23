@@ -231,7 +231,6 @@ def apply_drr(wave, dist, max_delay, room, A):
             out.append(signal.fftconvolve(x, ir))
         return out[0], out[1]
 
-    falloff_gain = r_ref / max(dist, r_ref)
     rev_gain = 4 * math.sqrt(math.pi / a)
     left, right = room_reverb(wave, max_delay)
     return left * rev_gain, right * rev_gain
@@ -297,7 +296,8 @@ def resample(x, orig_sr, target_sr):
 def process_audio(A, room_dimensions, audio, az, dist, listener_coords, sampling_rate=SR, normalize=True):
     # az in degrees anticlockwise from straight ahead (+y is to the left), dist in m,
     # listener_coords (x, y, z) in m inside the room
-    # audio is a file path, or a samples array at sampling_rate
+    # audio is a file path, or a samples array at sampling_rate, shaped (samples,) or (samples, channels)
+    # returns a (samples, 2) array at SR
     if isinstance(audio, str):
         audio, sampling_rate = sf.read(audio, dtype='float32')
     if audio.ndim > 1:
@@ -322,4 +322,9 @@ def process_audio(A, room_dimensions, audio, az, dist, listener_coords, sampling
     left = np.sum([pad(p) for p in parts_l], axis=0)
     right = np.sum([pad(p) for p in parts_r], axis=0)
 
-    return np.column_stack([left, right])
+    out = np.column_stack([left, right])
+    if normalize:
+        peak = np.abs(out).max()
+        if peak > 1:
+            out /= peak
+    return out

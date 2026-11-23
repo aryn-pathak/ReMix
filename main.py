@@ -1,22 +1,13 @@
+import os
+import sys
+
 import demucs.api
-from numba.core.types import none
-
-from audio import process_audio
-import questionary
-import questionary
-from questionary import Choice
 import numpy as np
+import questionary
+import soundfile as sf
+from questionary import Choice
 
-separator = demucs.api.Separator(
-    model="htdemucs_6s",
-    device="cpu",
-    shifts=1,
-    overlap=0.25,
-    split=True,
-    progress=True,
-)
-
-dist = int(input("instrument distance from listener (m), (defaults to 3): ")) or 3
+from audio import SR, process_audio
 
 ROOMS = {
     "Studio": {
@@ -36,53 +27,130 @@ ROOMS = {
     },
 }
 
-A = questionary.select(
-    "Choose a room type:",
-    choices=[Choice(name, value=coeffs) for name, coeffs in ROOMS.items()]
-            + [Choice("Custom", value="custom")],
-).ask()
+ROOM_SIZES = {
+    "Small":  (4, 3, 2.5),
+    "Medium": (8, 6, 3),
+    "Large":  (25, 15, 10),
+}
 
-if A == "custom":
-    A = {
-        surface: float(input(f"Absorption coefficient for {surface} (0–1):"))
-        for surface in ("ceiling", "floor", "walls")
-    }
+# htdemucs_6s stems, spread evenly around the listener
+INSTRUMENT_ORDER = ["drums", "vocals", "bass", "other", "guitar", "piano"]
 
-roomSize = questionary.select(
-    "Choose a room size:",
-    choices=[
-        Choice("Small",  value=(4, 3, 2.5)),
-        Choice("Medium", value=(8, 6, 3)),
-        Choice("Large",  value=(25, 15, 10)),
-        Choice("Custom", value="custom"),
-    ]
-).ask()
+DEFAULT_DIST = 3.0
 
-if roomSize == "custom":
-    s = input("Enter room size (x, y, z) in meters:")
-    roomSize = tuple(float(x) for x in s.replace(",", " ").split())
 
-instrument_order = ["drums", "vocals", "bass", "other" "guitar", "piano"]
+def ask(question):
+    # questionary returns None on ctrl-c, bail instead of carrying None into the maths
+    answer = question.ask()
+    if answer is None:
+        sys.exit(1)
+    return answer
 
-def separate_and_spatialise(songfile):
-    separated = separator.separate_audio_file(songfile)[1]
-    listener_coords = ((roomSize[0] / 2), (roomSize[1] / 2), (roomSize[2] / 2))
-    leftOut = None
-    rightOut = None
 
-    for i, instrument in enumerate(instrument_order, start=1):
-        az = 360*i/len(instrument_order)
-        left, right = process_audio(A, roomSize, separated[instrument], az, dist, listener_coords)
-        if leftOut is None:
-            leftOut = np.array(left, dtype=np.float64)
-            rightOut = np.array(right, dtype=np.float64)
+def ask_float(prompt, default=None, lo=None, hi=None):
+    while True:
+        s = input(prompt).strip()
+        if not s and default is not None:
+            return default
+        try:
+            v = float(s)
+        except ValueError:
+            print("  not a number, try again")
+            continue
+        if (lo is not None and v < lo) or (hi is not None and v > hi):
+            print(f"  must be between {lo} and {hi}")
+            continue
+        return v
+
+
+def ask_absorption():
+    A = ask(questionary.select(
+        "Choose a room type:",
+        choices=[Choice(name, value=coeffs) for name, coeffs in ROOMS.items()]
+                + [Choice("Custom", value="custom")],
+    ))
+    if A == "custom":
+        # lower bound > 0 so the total absorption (Sabine denominator) can't be zero
+        A = {surface: ask_float(f"Absorption coefficient for {surface} (0.01–1): ", lo=0.01, hi=1)
+             for surface in ("ceiling", "floor", "walls")}
+    return A
+
+
+def ask_room():
+    size = ask(questionary.select(
+        "Choose a room size:",
+        choices=[Choice(name, value=dims) for name, dims in ROOM_SIZES.items()]
+                + [Choice("Custom", value="custom")],
+    ))
+    while size == "custom":
+        s = input("Enter room size (length, width, height) in meters: ")
+        try:
+            dims = tuple(float(x) for x in s.replace(",", " ").split())
+        except ValueError:
+            dims = ()
+        if len(dims) == 3 and all(d > 0 for d in dims):
+            size = dims
         else:
-            leftOut += left
-            rightOut += right
+            print("  need three positive numbers, e.g. 8 6 3")
+    length, width, height = size
+    return {"length": length, "width": width, "height": height}
 
-    max_sample = max(np.abs(leftOut).max(), np.abs(rightOut).max())
-    if max_sample > 1:
-        leftOut = leftOut / max_sample
-        rightOut = rightOut / max_sample
 
-    return leftOut, rightOut
+def ask_distance(room):
+    # sources sit on a circle around the listener (room centre), so the circle has to fit
+    # inside the room or the image sources land on/inside the listener
+    max_dist = round(min(room["length"], room["width"]) / 2 * 0.95, 2)
+    default = min(DEFAULT_DIST, max_dist)
+    return ask_float(f"Instrument distance from listener in m (0.1–{max_dist:g}, default {default:g}): ",
+                     default=default, lo=0.1, hi=max_dist)
+
+
+def separate_and_spatialise(separator, songfile, A, room, dist):
+    _, separated = separator.separate_audio_file(songfile)
+    listener = (room["length"] / 2, room["width"] / 2, room["height"] / 2)
+
+    out = None
+    for i, instrument in enumerate(INSTRUMENT_ORDER):
+        print(f"spatialising {instrument}...")
+        az = 360 * i / len(INSTRUMENT_ORDER)
+        stem = separated[instrument].cpu().numpy().T
+        stereo = process_audio(A, room, stem, az, dist, listener,
+                               sampling_rate=separator.samplerate, normalize=False)
+        if out is None:
+            out = stereo
+        else:
+            n = max(len(out), len(stereo))
+            out = np.pad(out, ((0, n - len(out)), (0, 0))) + np.pad(stereo, ((0, n - len(stereo)), (0, 0)))
+
+    peak = np.abs(out).max()
+    if peak > 1:
+        out = out / peak
+    return out
+
+
+def main():
+    songfile = sys.argv[1] if len(sys.argv) > 1 else input("Path to song: ").strip().strip("'\"")
+    if not os.path.isfile(songfile):
+        sys.exit(f"no such file: {songfile}")
+
+    room = ask_room()
+    A = ask_absorption()
+    dist = ask_distance(room)
+
+    separator = demucs.api.Separator(
+        model="htdemucs_6s",
+        device="cpu",
+        shifts=1,
+        overlap=0.25,
+        split=True,
+        progress=True,
+    )
+
+    out = separate_and_spatialise(separator, songfile, A, room, dist)
+    outfile = os.path.splitext(songfile)[0] + "_spatialised.wav"
+    sf.write(outfile, out, SR)
+    print(f"wrote {outfile}")
+
+
+if __name__ == "__main__":
+    main()
