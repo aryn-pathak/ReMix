@@ -1,6 +1,6 @@
 name: Build
 
-# pushing a tag like v2.0 builds macOS and Windows and publishes a release;
+# pushing a tag like v1.0 builds macOS and Windows and publishes a release;
 # running it by hand from the Actions tab just builds, for testing
 on:
   push:
