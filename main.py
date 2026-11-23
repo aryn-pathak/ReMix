@@ -1,8 +1,11 @@
 import demucs.api
+from numba.core.types import none
+
 from audio import process_audio
 import questionary
-
-# A, audio, sampling_rate=SR, room_dimensions=ROOM_DIMENSIONS, listener_coords=L_COORDS, source_coords=S_COORDS, normalize=True
+import questionary
+from questionary import Choice
+import numpy as np
 
 separator = demucs.api.Separator(
     model="htdemucs_6s",
@@ -13,11 +16,7 @@ separator = demucs.api.Separator(
     progress=True,
 )
 
-original, separated = separator.separate_audio_file("")
-
 dist = int(input("instrument distance from listener (m), (defaults to 3): ")) or 3
-import questionary
-from questionary import Choice
 
 ROOMS = {
     "Studio": {
@@ -63,3 +62,27 @@ if roomSize == "custom":
     s = input("Enter room size (x, y, z) in meters:")
     roomSize = tuple(float(x) for x in s.replace(",", " ").split())
 
+instrument_order = ["drums", "vocals", "bass", "other" "guitar", "piano"]
+
+def separate_and_spatialise(songfile):
+    separated = separator.separate_audio_file(songfile)[1]
+    listener_coords = ((roomSize[0] / 2), (roomSize[1] / 2), (roomSize[2] / 2))
+    leftOut = None
+    rightOut = None
+
+    for i, instrument in enumerate(instrument_order, start=1):
+        az = 360*i/len(instrument_order)
+        left, right = process_audio(A, roomSize, separated[instrument], az, dist, listener_coords)
+        if leftOut is None:
+            leftOut = np.array(left, dtype=np.float64)
+            rightOut = np.array(right, dtype=np.float64)
+        else:
+            leftOut += left
+            rightOut += right
+
+    max_sample = max(np.abs(leftOut).max(), np.abs(rightOut).max())
+    if max_sample > 1:
+        leftOut = leftOut / max_sample
+        rightOut = rightOut / max_sample
+
+    return leftOut, rightOut

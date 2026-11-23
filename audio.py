@@ -322,8 +322,4 @@ def process_audio(A, room_dimensions, audio, az, dist, listener_coords, sampling
     left = np.sum([pad(p) for p in parts_l], axis=0)
     right = np.sum([pad(p) for p in parts_r], axis=0)
 
-    peak = max(np.max(np.abs(left)), np.max(np.abs(right)))
-    if normalize and peak > 1:
-        left, right = left / peak, right / peak
-
     return np.column_stack([left, right])
