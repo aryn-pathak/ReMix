@@ -4,6 +4,8 @@ import sys
 
 # let ops mps doesn't support fall back to the cpu; must be set before torch is imported
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+# hide huggingface's "unauthenticated requests" warning when the model downloads
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
 import demucs.api
 import numpy as np
@@ -112,8 +114,6 @@ def ask_room():
 
 
 def ask_distance(room):
-    # sources sit on a circle around the listener (room centre), so the circle has to fit
-    # inside the room or the image sources land on/inside the listener
     max_dist = round(min(room["length"], room["width"]) / 2 * 0.95, 2)
     default = min(DEFAULT_DIST, max_dist)
     return ask_float(f"Instrument distance from listener in m (0.1–{max_dist:g}, default {default:g}): ",
@@ -177,12 +177,10 @@ def main():
     sf.write(outfile, out, SR)
     print(f"wrote {outfile}")
 
-    # double-clicking the app on windows opens a console that closes as soon as we exit
     if getattr(sys, "frozen", False) and sys.platform == "win32":
         input("Press Enter to exit")
 
 
 if __name__ == "__main__":
-    # in the packaged app, helper processes torch starts re-run this executable; this hands them off
     multiprocessing.freeze_support()
     main()

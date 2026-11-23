@@ -7,6 +7,8 @@
 
 Prebuilt apps for macOS (Apple Silicon) and Windows are on the [Releases page](https://github.com/aryn-pathak/ReMix/releases/latest), with first-launch instructions. No Python needed. The rest of this README is for running from source.
 
+> NOTE: the first run downloads htdemucs (stem separation model), which is ~50MB and may take time. Other runs take less time, but still take time to separate stems, depending on the device (GPU or CPU).
+
 ## Requirements
 
 - Python 3.12+ (tested, might work on older versions)
@@ -25,7 +27,7 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 **Optional (Linux):** the default `torch` from PyPI is the CUDA build and pulls in several GB of NVIDIA packages (vs ~200 MB for CPU only). If you don't have an NVIDIA GPU, install the smaller CPU-only build first:
 
 ```sh
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
 
 Then install the dependencies:
@@ -52,7 +54,9 @@ If you leave out the path, you'll be asked for it. You then pick:
 - **Room type**: Studio, Church, Outdoors, or custom absorption coefficients (0.01–1) for the ceiling, floor and walls. Higher means more absorbent and less echo. Real rooms have furniture that absorbs a lot, so low custom values may sound echoey.
 - **Distance**: how far the instruments sit from you, in meters.
 
-Stem separation runs on the GPU if one is available (Apple Silicon via MPS, or NVIDIA via CUDA), otherwise on the CPU. The first run downloads the Demucs `htdemucs_6s` model weights. The output is written next to the input song as `<song>_spatialised.wav`.
+> NOTE: the first run downloads htdemucs (stem separation model), which is ~50MB and may take time. Other runs take less time, but still take time to separate stems, depending on the device (GPU or CPU).
+
+Stem separation runs on the GPU if one is available (Apple Silicon via MPS, or NVIDIA via CUDA), otherwise on the CPU. After the first run the model is cached, so it works offline. MP3, WAV, FLAC, OGG and AIFF files work (not M4A/AAC). The output is written next to the input song as `<song>_spatialised.wav`.
 
 ## Files
 
@@ -77,7 +81,7 @@ Cues used:
 
 For each stem, the direct sound (with falloff, absorption and HRIR), early reflections, and late reverb are created separately and added together, left and right channels separately. The result is scaled to prevent clipping.
 
-A more detailed explanation is in the [devlog](https://stardance.hackclub.com/projects/62390/devlogs/63226).
+A more detailed explanation of each cue, and what I tried along the way, is [here](how_it_works.md).
 
 ## Building the app
 
