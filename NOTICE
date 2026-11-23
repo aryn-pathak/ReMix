@@ -1,0 +1,19 @@
+ReMix
+Copyright (c) 2026 Aryan Pathak. Licensed under the MIT License, see LICENSE.
+
+This software bundles third-party data and software:
+
+SADIE II HRIR database (D1, Neumann KU100), file SADIEII_KU100.sofa
+  SADIE Database Copyright 2018 The University of York.
+  Licensed under the Apache License, Version 2.0:
+  https://www.apache.org/licenses/LICENSE-2.0
+  This product includes data developed at The Audio Lab, University of York, UK
+  (Cal Armstrong, Lewis Thresh, Gavin Kearney) as part of the SADIE Project.
+  https://www.york.ac.uk/sadie-project/database.html
+
+Hybrid Transformer Demucs (htdemucs_6s), by Meta AI, MIT License.
+  https://github.com/facebookresearch/demucs
+  The model weights are downloaded on first run, not bundled.
+
+PyTorch, NumPy, SciPy and the other Python packages in the app keep their own
+licenses, included alongside them in the _internal folder where provided.

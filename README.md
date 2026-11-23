@@ -1,7 +1,11 @@
-# ReMix (1.0)
+# ReMix (2.0)
 
 > An audio spatializer that separates a song into stems and places each one at a distinct 3D position around the listener, creating a wider, more immersive headphone experience.
 > Output demos of tested songs [here](https://youtu.be/GdZYN0wQXBQ)
+
+## Download
+
+Prebuilt apps for macOS (Apple Silicon) and Windows are on the [Releases page](https://github.com/aryn-pathak/Binaural/releases/latest), with first-launch instructions. No Python needed. The rest of this README is for running from source.
 
 ## Requirements
 
@@ -74,6 +78,17 @@ Cues used:
 For each stem, the direct sound (with falloff, absorption and HRIR), early reflections, and late reverb are created separately and added together, left and right channels separately. The result is scaled to prevent clipping.
 
 A more detailed explanation is in the [devlog](https://stardance.hackclub.com/projects/62390/devlogs/63226).
+
+## Building the app
+
+Pushing a tag like `v2.0` runs `.github/workflows/build.yml`, which builds the macOS and Windows apps with PyInstaller (`ReMix.spec`) and publishes them as a release. To build locally, with the SOFA file in place:
+
+```sh
+pip install pyinstaller
+pyinstaller --noconfirm ReMix.spec
+```
+
+The app ends up in `dist/ReMix/`.
 
 ## License
 

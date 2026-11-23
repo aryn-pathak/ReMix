@@ -15,7 +15,7 @@ T = 256 / SR * 1000  # length of a measurement in ms (48kHz sampling rate)
 
 # a pyinstaller build unpacks bundled data to sys._MEIPASS, otherwise look next to this file
 BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-sofa = s.read_sofa(os.path.join(BASE_DIR, "SADIEII_KU100.sofa"))
+sofa = s.read_sofa(os.path.join(BASE_DIR, "SADIEII_KU100.sofa"), verbose=False)
 sources = sofa.SourcePosition[:, :2]
 
 hrirs = np.asarray(sofa.Data_IR, dtype=float)

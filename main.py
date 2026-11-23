@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sys
 
@@ -49,6 +50,16 @@ def ask(question):
     if answer is None:
         sys.exit(1)
     return answer
+
+
+def ask_path():
+    while True:
+        # terminals quote or backslash-escape paths dragged in
+        path = input("Path to song (type it or drag the file in): ").strip().strip("'\"").replace("\\ ", " ")
+        path = os.path.expanduser(path)
+        if os.path.isfile(path):
+            return path
+        print(f"  no file at {path}")
 
 
 def ask_float(prompt, default=None, lo=None, hi=None):
@@ -141,9 +152,12 @@ def separate_and_spatialise(separator, songfile, A, room, dist):
 
 
 def main():
-    songfile = sys.argv[1] if len(sys.argv) > 1 else input("Path to song: ").strip().strip("'\"")
-    if not os.path.isfile(songfile):
-        sys.exit(f"no such file: {songfile}")
+    if len(sys.argv) > 1:
+        songfile = sys.argv[1]
+        if not os.path.isfile(songfile):
+            sys.exit(f"no such file: {songfile}")
+    else:
+        songfile = ask_path()
 
     room = ask_room()
     A = ask_absorption()
@@ -163,6 +177,12 @@ def main():
     sf.write(outfile, out, SR)
     print(f"wrote {outfile}")
 
+    # double-clicking the app on windows opens a console that closes as soon as we exit
+    if getattr(sys, "frozen", False) and sys.platform == "win32":
+        input("Press Enter to exit")
+
 
 if __name__ == "__main__":
+    # in the packaged app, helper processes torch starts re-run this executable; this hands them off
+    multiprocessing.freeze_support()
     main()
