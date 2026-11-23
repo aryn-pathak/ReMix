@@ -16,3 +16,7 @@ __pycache__/
 # PyInstaller output
 build/
 dist/
+
+# old entry points
+stems.py
+tui.py
