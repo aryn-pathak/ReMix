@@ -8,3 +8,5 @@ windows-curses>=2.4; sys_platform == "win32"  # curses isn't built into python o
 
 # only needed for the reference scripts (visualisation.py, analysis.py)
 matplotlib>=3.11.1
+
+questionary
