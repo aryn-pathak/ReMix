@@ -13,9 +13,6 @@ r_ref = 1.0
 SR=48000
 T = 256 / SR * 1000  # length of a measurement in ms (48kHz sampling rate)
 
-L_COORDS = (2.0, 1.5, 1.7)
-S_COORDS = (6.243, 5.743, 1.7)   # 6.0 m at 45 deg, 0 deg elevation
-
 # a pyinstaller build unpacks bundled data to sys._MEIPASS, otherwise look next to this file
 BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 sofa = s.read_sofa(os.path.join(BASE_DIR, "SADIEII_KU100.sofa"))
@@ -37,7 +34,7 @@ def apply_IR(az, el, wave):
     right = signal.fftconvolve(wave, right_IR)
     return left, right
 
-def direction(p, listener=L_COORDS):
+def direction(p, listener):
     # listener faces +x (length), +y (width) is to the left, +z is up
     dx, dy, dz = (p[i] - listener[i] for i in range(3))
     az = math.degrees(math.atan2(dy, dx)) % 360
@@ -239,8 +236,12 @@ def apply_drr(wave, dist, max_delay, room, A):
     left, right = room_reverb(wave, max_delay)
     return left * rev_gain, right * rev_gain
 
-def early_reflections(A, wave, room, source=S_COORDS, listener=L_COORDS):
+def early_reflections(A, wave, room, az, dist, listener):
     size = (room["length"], room["width"], room["height"])
+    # image sources need a point in the room: the source sits on the listener's level
+    source = (listener[0] + dist * math.cos(math.radians(az)),
+              listener[1] + dist * math.sin(math.radians(az)),
+              listener[2])
 
     def image(k):
         axis = k // 2
@@ -249,18 +250,16 @@ def early_reflections(A, wave, room, source=S_COORDS, listener=L_COORDS):
         p[axis] = 2 * wall - p[axis]
         return tuple(p)
 
-    SL = distance(source, listener)
-
     def alpha(k):
         if k < 4:
             return A["walls"]
         return A["floor"] if k == 4 else A["ceiling"]
 
     def a(k):
-        return math.sqrt(1 - alpha(k)) * max(SL, r_ref) / distance(image(k), listener)
+        return math.sqrt(1 - alpha(k)) * max(dist, r_ref) / distance(image(k), listener)
 
     def M(k):
-        return round((distance(image(k), listener) - SL) * SR / 343)
+        return round((distance(image(k), listener) - dist) * SR / 343)
 
     # each reflection arrives from its image source's direction (the bounce point
     # lies on the listener -> image line), so it gets that direction's HRIR
@@ -295,7 +294,9 @@ def resample(x, orig_sr, target_sr):
     g = math.gcd(int(orig_sr), int(target_sr))
     return signal.resample_poly(x, int(target_sr) // g, int(orig_sr) // g, axis=0)
 
-def process_audio(A, room_dimensions, audio, sampling_rate=SR, listener_coords=L_COORDS, source_coords=S_COORDS, normalize=True):
+def process_audio(A, room_dimensions, audio, az, dist, listener_coords, sampling_rate=SR, normalize=True):
+    # az in degrees anticlockwise from straight ahead (+y is to the left), dist in m,
+    # listener_coords (x, y, z) in m inside the room
     # audio is a file path, or a samples array at sampling_rate
     if isinstance(audio, str):
         audio, sampling_rate = sf.read(audio, dtype='float32')
@@ -304,14 +305,11 @@ def process_audio(A, room_dimensions, audio, sampling_rate=SR, listener_coords=L
     if sampling_rate != SR:
         audio = resample(audio, sampling_rate, SR)
 
-    dist = distance(source_coords, listener_coords)
-    az, el = direction(source_coords, listener_coords)
-
     audio = apply_air_absorption(audio, dist)      # unattenuated, air-absorbed
     direct = apply_falloff(dist, audio)            # distance-attenuated
 
-    l_direct, r_direct = apply_IR(az, el, direct)
-    l_early, r_early, max_delay = early_reflections(A, direct, room_dimensions, source_coords, listener_coords)
+    l_direct, r_direct = apply_IR(az, 0, direct)
+    l_early, r_early, max_delay = early_reflections(A, direct, room_dimensions, az, dist, listener_coords)
     late_rev_L, late_rev_R = apply_drr(audio, dist, max_delay, room_dimensions, A)
 
     parts_l = [l_direct, l_early, late_rev_L]
