@@ -1,10 +1,14 @@
 import os
 import sys
 
+# let ops mps doesn't support fall back to the cpu; must be set before torch is imported
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
 import demucs.api
 import numpy as np
 import questionary
 import soundfile as sf
+import torch
 from questionary import Choice
 
 from audio import SR, process_audio
@@ -105,6 +109,14 @@ def ask_distance(room):
                      default=default, lo=0.1, hi=max_dist)
 
 
+def pick_device():
+    if torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
 def separate_and_spatialise(separator, songfile, A, room, dist):
     _, separated = separator.separate_audio_file(songfile)
     listener = (room["length"] / 2, room["width"] / 2, room["height"] / 2)
@@ -139,7 +151,7 @@ def main():
 
     separator = demucs.api.Separator(
         model="htdemucs_6s",
-        device="cpu",
+        device=pick_device(),
         shifts=1,
         overlap=0.25,
         split=True,
