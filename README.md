@@ -39,25 +39,28 @@ Finally, download the SADIE II zip linked above, extract the 48 kHz KU100 HRIR f
 With the virtual environment activated, run:
 
 ```sh
-python stems.py
+python main.py path/to/song.mp3
 ```
 
-The first run downloads the Demucs `htdemucs_6s` model weights. The output is written next to the input song as `<song>_spatial.wav`.
+If you leave out the path, you'll be asked for it. You then pick:
 
-> Note: The material of the room is dictated by it's absorption coefficient alpha, "A" in `audio.py`. Look up absorption for your desired materials and edit the values. Real rooms have furniture which absorb much more, so uncompensated coefficients may feel echoey.
+- **Room size**: Small, Medium, Large, or custom dimensions in meters.
+- **Room type**: Studio, Church, Outdoors, or custom absorption coefficients (0.01–1) for the ceiling, floor and walls. Higher means more absorbent and less echo. Real rooms have furniture that absorbs a lot, so low custom values may sound echoey.
+- **Distance**: how far the instruments sit from you, in meters.
+
+Stem separation runs on the GPU if one is available (Apple Silicon via MPS, or NVIDIA via CUDA), otherwise on the CPU. The first run downloads the Demucs `htdemucs_6s` model weights. The output is written next to the input song as `<song>_spatialised.wav`.
 
 ## Files
 
-- `stems.py`: The main file to run. Separates the song into stems, processes them with `audio.py`, and saves the result.
+- `main.py`: The main file to run. Asks for the room setup, separates the song into stems, processes them with `audio.py`, and saves the result.
 - `audio.py`: The functions that apply the cues to the audio and process it.
-- `tui.py`: The text UI for advanced positioning in `stems.py`.
 - `compute_absorption.py`: A one-time-run script that calculates a constant set of dB/m attenuation values for different frequencies, used for air absorption. Uses the ISO 9613-1 standard.
 - `visualisation.py`: A set of functions I used to try understanding the HRIRs.
 - `analysis.py`: An experimental (incomplete) attempt at compressing HRIRs. Not used by the main pipeline, so it's safe to ignore.
 
 ## How it works
 
-Each of the six stems is rendered binaurally on its own and placed at a different position around the listener. `audio.py` applies 6 psychoacoustic cues to create a sense of direction, space, and distance.
+Each of the six stems is rendered binaurally on its own and placed at a different position, spread evenly in a circle around the listener. `audio.py` applies 6 psychoacoustic cues to create a sense of direction, space, and distance.
 
 Cues used:
 
