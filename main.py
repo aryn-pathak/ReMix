@@ -2,10 +2,7 @@ import multiprocessing
 import os
 import sys
 
-# let ops mps doesn't support fall back to the cpu; must be set before torch is imported
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
-# hide huggingface's "unauthenticated requests" warning when the model downloads
-os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
 import demucs.api
 import numpy as np
@@ -47,7 +44,6 @@ DEFAULT_DIST = 3.0
 
 
 def ask(question):
-    # questionary returns None on ctrl-c, bail instead of carrying None into the maths
     answer = question.ask()
     if answer is None:
         sys.exit(1)
@@ -56,7 +52,6 @@ def ask(question):
 
 def ask_path():
     while True:
-        # terminals quote or backslash-escape paths dragged in
         path = input("Path to song (type it or drag the file in): ").strip().strip("'\"").replace("\\ ", " ")
         path = os.path.expanduser(path)
         if os.path.isfile(path):
@@ -87,7 +82,6 @@ def ask_absorption():
                 + [Choice("Custom", value="custom")],
     ))
     if A == "custom":
-        # lower bound > 0 so the total absorption (Sabine denominator) can't be zero
         A = {surface: ask_float(f"Absorption coefficient for {surface} (0.01–1): ", lo=0.01, hi=1)
              for surface in ("ceiling", "floor", "walls")}
     return A

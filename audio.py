@@ -53,7 +53,6 @@ absorption_dbm = {125.0: -0.0004, 250.0: -0.0013, 500.0: -0.0027, 1000.0: -0.004
 def apply_air_absorption(wave, dist): # meters
     def apply_eq(bands, wave):
         # bands: {frequency: dB}, +ve boosts, -ve cuts
-        # Q is now derived per-band from neighbor spacing instead of fixed
         def band_q(freqs, i):
             def q_from_bandwidth_octaves(bw_octaves, freq):
                 w0 = 2 * math.pi * freq / SR
@@ -110,7 +109,6 @@ def apply_air_absorption(wave, dist): # meters
         target = np.array([bands[f] for f in freqs], dtype=float)
 
         def coeffs(i, db):
-            # top band is a high shelf so the cut holds up to Nyquist
             if i == len(freqs) - 1 and len(freqs) > 1:
                 return high_shelf_coeffs(freqs[i], db, 1 / math.sqrt(2))
             return peaking_coeffs(freqs[i], db, band_q(freqs, i))
@@ -120,8 +118,6 @@ def apply_air_absorption(wave, dist): # meters
             _, h = signal.freqz([b0, b1, b2], [1, a1, a2], worN=2 * np.pi * np.array(freqs) / SR)
             return 20 * np.log10(np.abs(h))
 
-        # bands overlap, so each band's gain != its target; solve for gains whose
-        # combined response hits the target at every centre (Newton, dB isn't linear in gain)
         gains = target.copy()
         for _ in range(20):
             actual = np.sum([band_response(i, g) for i, g in enumerate(gains)], axis=0)
@@ -139,7 +135,6 @@ def apply_air_absorption(wave, dist): # meters
     return apply_eq(bands, wave)
 
 def allpass(x, M, g=0.7):
-    # Schroeder allpass: y[n] = -g*x[n] + x[n-M] + g*y[n-M]
     b = np.zeros(M + 1)
     b[0], b[M] = -g, 1
     a = np.zeros(M + 1)
@@ -169,22 +164,17 @@ def apply_drr(wave, dist, max_delay, room, A):
         max_dist = math.sqrt(h**2 + w**2 + l**2) / 2
         min_dist = min(h, w, l) / 2
         rng = random.Random(0)
-        n_lines = 32  # power of 2 for the Hadamard matrices
+        n_lines = 32
         delays = set()
         while len(delays) < n_lines:
             d = rng.uniform(min_dist, max_dist)
             delays.add(next_prime(round(2 * d / 343 * SR)))
         Ms = np.array(sorted(delays))
-
-        # lossless mixing (orthogonal Hadamard) + per-line gain so every line decays 60 dB in rts
         Q = linalg.hadamard(n_lines) / math.sqrt(n_lines)
         g = 10 ** (-3 * (Ms / SR) / rts)
 
         def signs():
             return np.array([rng.choice((-1.0, 1.0)) for _ in range(n_lines)])
-
-        # multichannel diffuser in front of the FDN: each stage delays every channel by a different
-        # amount, flips random polarities and Hadamard-mixes, so one impulse becomes a dense burst
         diffused = signs()[:, None]
         for stage_ms in (1.25, 2.5, 5, 10):
             span = stage_ms / 1000 * SR
@@ -194,9 +184,7 @@ def apply_drr(wave, dist, max_delay, room, A):
                 shifted[i, o:o + diffused.shape[1]] = diffused[i]
             diffused = Q @ (signs()[:, None] * shifted)
 
-        # impulse response of each delay line's output, computed a block at a time: within a block
-        # no longer than the shortest delay, every delay-line read comes from an already-finished write
-        lines = np.zeros((n_lines, truncate_samples))  # what enters each delay line
+        lines = np.zeros((n_lines, truncate_samples))
         lines[:, :diffused.shape[1]] = diffused[:, :truncate_samples]
         outs = np.zeros((n_lines, truncate_samples))
         row = np.arange(n_lines)[:, None]
@@ -206,9 +194,6 @@ def apply_drr(wave, dist, max_delay, room, A):
             outs[:, t] = np.where(idx >= 0, lines[row, np.maximum(idx, 0)], 0) * g[:, None]
             lines[:, t] += Q @ outs[:, t]
 
-        # the line outputs are mutually uncorrelated, so giving each one its own direction (spread
-        # evenly over the sphere) and its HRIR builds a diffuse field at the ears: coherent in the
-        # bass, incoherent higher up, exactly as the head shapes it in a real room
         ir_l = np.zeros(truncate_samples + N - 1)
         ir_r = np.zeros(truncate_samples + N - 1)
         for i in range(n_lines):
@@ -237,7 +222,6 @@ def apply_drr(wave, dist, max_delay, room, A):
 
 def early_reflections(A, wave, room, az, dist, listener):
     size = (room["length"], room["width"], room["height"])
-    # image sources need a point in the room: the source sits on the listener's level
     source = (listener[0] + dist * math.cos(math.radians(az)),
               listener[1] + dist * math.sin(math.radians(az)),
               listener[2])
@@ -260,15 +244,13 @@ def early_reflections(A, wave, room, az, dist, listener):
     def M(k):
         return round((distance(image(k), listener) - dist) * SR / 343)
 
-    # each reflection arrives from its image source's direction (the bounce point
-    # lies on the listener -> image line), so it gets that direction's HRIR
     taps = [(M(k), a(k), *getir(*direction(image(k), listener))) for k in range(6)]
     max_delay = max(m for m, *_ in taps)
 
     b_l = np.zeros(max_delay + N)
     b_r = np.zeros(max_delay + N)
     for m, ak, left_IR, right_IR in taps:
-        b_l[m:m + N] += ak * left_IR  # += in case two images share a delay
+        b_l[m:m + N] += ak * left_IR
         b_r[m:m + N] += ak * right_IR
 
     x = np.asarray(wave, dtype=float)
@@ -287,7 +269,6 @@ def decorrelate(wave, iacc = 0.4, d = 0.010):
     return l, r
 
 def resample(x, orig_sr, target_sr):
-    # polyphase resampling along axis 0, e.g. 44.1 to 48 kHz is up 160, down 147
     if orig_sr == target_sr:
         return x
     g = math.gcd(int(orig_sr), int(target_sr))
