@@ -37,8 +37,14 @@ ROOM_SIZES = {
     "Large":  (25, 15, 10),
 }
 
-# htdemucs_6s stems, spread evenly around the listener
-INSTRUMENT_ORDER = ["drums", "vocals", "bass", "other", "guitar", "piano"]
+AZIMUTHS = {
+    "drums":  45,
+    "vocals": 99,
+    "bass":   153,
+    "other":  207,
+    "guitar": 261,
+    "piano":  315,
+}
 
 DEFAULT_DIST = 3.0
 
@@ -127,9 +133,8 @@ def separate_and_spatialise(separator, songfile, A, room, dist):
     listener = (room["length"] / 2, room["width"] / 2, room["height"] / 2)
 
     out = None
-    for i, instrument in enumerate(INSTRUMENT_ORDER):
+    for instrument, az in AZIMUTHS.items():
         print(f"spatialising {instrument}...")
-        az = 360 * i / len(INSTRUMENT_ORDER)
         stem = separated[instrument].cpu().numpy().T
         stereo = process_audio(A, room, stem, az, dist, listener,
                                sampling_rate=separator.samplerate, normalize=False)
